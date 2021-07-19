@@ -1,0 +1,970 @@
+<!-- NO PANDOC ON HOPPER
+--- 
+title: "Chip 8 - Single-Cell Overview of Normalized Expressioni (scone)"
+author: "CQR, San Francisco"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  BiocStyle::html_document2:
+    toc: true
+    # does this have an effect
+    fig_caption: yes    
+    # this has no effect
+    number_sections: yes
+    css: ../../pandocFiles/pandoc3.css
+bibliography: ../../bibFiles/scRNASeq.bib
+#csl: ../../../bibFiles/acm-sig-proceedings.csl  - doest work with pandoc-siteproc
+csl: ../../bibFiles/cell-numeric.csl
+#biblio-style: acm
+link-citations: true
+vignette: >
+ %\VignetteEncoding{UTF-8}
+ %\VignetteEngine{knitr::rmarkdown}
+
+---
+-->
+
+<!-- ALWAYS DO THIS FIRST - Repeat Later  -->
+`r options(stringsAsFactors = FALSE)`
+
+
+# Parameter Settings {-}
+
+* Time = `r date()`
+
+```{r runParam, echo=TRUE,cache=F}
+
+ HOPPER_ROOT <-  '/mnt/hopper'  # Codd
+ HOPPER_ROOT <-  '/geneticsH'   # Hopper
+ if(!file.exists(HOPPER_ROOT)) stop("HOPPER_ROOT Misspecified.")
+
+ BASEDIR <- "/mnt/watson"
+ if(!file.exists(BASEDIR)) stop("BASEDIR ERROR", BASEDIR)
+
+ # Data Descriptor - used as part of file names for storage
+ DD <- 'Chip8T016P'
+
+ Chip8Desc.vec <- c("XS00055_T016Px01r06_d4PBS", "XS00056_T016Px01r06_d7PBS", 
+                    "XS00057_T016Px01r06_d4Abx1003d", "XS00058_T016Px01r06_d10PBS", 
+                    "XS00059_T016Px01r06_d7Abx1003d", "XS00060_T016Px01r06_d7PBSc6", 
+                    "XS00061_T016Px01r06_d10PBSc3", "XS00062_T016Px01r06_d7Abx1003dc3", 
+                    "XS00063_T016Px01r06_d10PBSp6", "XS00064_T016Px01r06_d7Abx100d3p10") 
+
+ Chip8SampDesc.vec <- sapply(strsplit(Chip8Desc.vec, split='_'),'[',3)
+ names(Chip8SampDesc.vec) <- sapply(strsplit(Chip8Desc.vec, split='_'),'[',1)
+
+ DATA_ROOT <- file.path(HOPPER_ROOT, 'tenX/1.count/countsChip8/')
+
+ # Processing parameters
+ lowerDetectionLimit <- 0
+
+ # Subsample fraction of cells form each sample
+ CELL_FRAC <- .05 
+
+```
+<!-- ######################################################################## -->
+
+
+```{r GlobalOptions, results="hide", include=FALSE, cache=FALSE}
+knitr::opts_knit$set(stop_on_error = 2L) #really make it stop
+#knitr::dep_auto()
+```
+<!-- ######################################################################## -->
+
+
+```{r doMC, echo=F, eval=F}
+ # Set up parallel computing.  Only required if functions make use of multi-core system.
+ suppressMessages(require(doMC))
+ suppressMessages(require(parallel))
+ cat("Cores =", detectCores(),'\n')
+ registerDoMC(cores=detectCores())
+```
+<!-- ######################################################################## -->
+
+<!-- 
+This script does not make use of the multiple cores.  For an example of 
+an R computing application making use of multplie cores, see the `SAVER` tutorial:
+-->
+
+```{r doParallel, eval=F, echo=F}
+
+ suppressMessages(require(doParallel))
+ suppressMessages(require(parallel))
+ cat("Cores =", detectCores(),'\n')
+
+ registerDoParallel(cores = detectCores())
+
+```
+
+
+```{r Prelims, include=FALSE, echo=FALSE, results='hide', message=FALSE,cache=F} 
+ FN <- "MCA-Chip8Scone"
+ 
+ # "If stringsAsFactors hasn’t bitten you yet, it will." 
+ # - https://www.r-bloggers.com/fun-with-rprofile-and-customizing-r-startup/
+ options(stringsAsFactors=F)
+
+ #suppressPackageStartupMessages(require(org.Hs.eg.db))
+ suppressPackageStartupMessages(require(methods))
+ suppressPackageStartupMessages(require(rmarkdown))
+ suppressPackageStartupMessages(require(bookdown))
+ suppressPackageStartupMessages(require(knitr))
+
+ suppressPackageStartupMessages(require(scone))
+
+ #suppressPackageStartupMessages(require(scater))
+ #suppressPackageStartupMessages(require(Seurat))
+ suppressPackageStartupMessages(require(dplyr))
+ suppressPackageStartupMessages(require(magrittr))
+ suppressPackageStartupMessages(require(Matrix))
+
+ # Shotcuts for knitting and redering while in R session (Invoke interactive R from R/Scripts folder)
+ kk <- function(n='') knit2html(paste("t", n, sep=''), envir=globalenv(),
+       output=paste(FN,".html", sep=''))
+
+ rr <- function(n='') render(paste("t", n, sep=''), envir=globalenv(),
+       output_file=paste(FN,".html", sep='')) ##, output_dir='Scripts')
+
+ bb <- function(n='') browseURL(paste(FN,".html", sep=''))
+
+ # The usual shorcuts
+ zz <- function(n='') source(paste("t", n, sep=''))
+
+ if(file.exists('/Users/francois/Dropbox/Projects/SingleCell/Jun2017/R/'))
+ WRKDIR <- '/Users/francois/Dropbox/Projects/SingleCell/Jun2017/R/'  else
+ WRKDIR <- '/home/frcollin/Projects/SingleCell/Jun2017/R/'
+
+ # Script will be invoked from R/Scripts folder.  Make 'R' the WRKDIR.
+ WRKDIR <- normalizePath('..')
+
+ # Not needed if path ois relative ...
+ if(!file.exists(WRKDIR)) stop("WRKDIR ERROR: ", WRKDIR)
+
+ # do once
+ #setwd(WRKDIR)
+
+ # csv output
+ csvOut_DIR <- file.path(WRKDIR, 'Scripts', 'csvOut/MCA/')
+ suppressMessages(dir.create(csvOut_DIR, recursive=T))
+ 
+ # Data
+ suppressMessages(dir.create(file.path(WRKDIR, 'Data_MCA')))
+
+
+ # file rmarkdown file management options: cache, figures
+ cache_DIR <- file.path(WRKDIR, 'Scripts', 'cache/MCA/')
+ suppressMessages(dir.create(cache_DIR, recursive=T))
+ opts_chunk$set(cache.path=cache_DIR)
+
+ figure_DIR <- file.path(WRKDIR, 'Scripts', 'figure/MCA/')
+ suppressMessages(dir.create(figure_DIR, recursive=T))
+ opts_chunk$set(fig.path=figure_DIR)
+
+ #table_DIR <- file.path(WRKDIR, 'Scripts', 'table/MCA/')
+ #suppressMessages(dir.create(table_DIR, recursive=T))
+ #opts_chunk$set(fig.path=table_DIR)
+ 
+ # need a local copy of help_DIR
+ #help_DIR <- file.path(WRKDIR, 'help_files')
+ help_DIR <- file.path('.', 'help_files')
+ suppressMessages(dir.create(help_DIR, recursive=T))
+ 
+ temp_DIR <- file.path(WRKDIR, 'temp_files')
+ suppressMessages(dir.create(temp_DIR, recursive=T))
+
+ if(file.exists('/Users/francois/Dropbox/Projects/SingleCell/Jun2017/'))
+ ROOT <- '/Users/francois/Dropbox/Projects/SingleCell/Jun2017/'  else
+ ROOT <- '/home/frcollin/Projects/SingleCell/Jun2017/'
+ #ROOT <- '/mnt100/home/Dropbox/Projects/SingleCell/Jun2017/'
+
+ # Script will be invoked from R/Scripts folder.  Make ROOT one up from R
+ ROOT <- '../..'
+ #EXT_DATA <- file.path(ROOT, 'extData')
+ #if(!file.exists(EXT_DATA)) stop("EXT_DATA ERROR: ", EXT_DATA)
+
+```
+<!-- ######################################################################## -->
+
+
+***  
+
+```{r utilityFns, echo=FALSE,cache=F}
+ # Here we define some utility functions
+
+ # Save and load
+ ##################################################
+ # save single object with name ObjName  to file FileName
+ saveObj <- function(FileName='', ObjName='', DataDir=file.path(WRKDIR, 'Data')){
+  assign(FileName, get(ObjName))
+  save(list=FileName, file=file.path(DataDir, FileName))
+  rm(list=FileName)
+ }
+
+ # load single object stored in FileName and assign to ObjName in local env
+ loadObj <- function(FileName='', ObjName='', DataDir=file.path(WRKDIR, 'Data')){
+  load(file.path(DataDir, FileName))
+  assign(ObjName, get(FileName),pos=1)
+  rm(list=FileName)
+ }
+
+ # Copy def to help_DIR
+ dput(saveObj, file.path(help_DIR, 'saveObj.r'))
+ dput(loadObj, file.path(help_DIR, 'loadObj.r'))
+
+
+ # timing 
+ ##################################################
+ startTimedMessage <- function(...) {
+        x <- paste0(..., collapse='')
+        #message(x, appendLF=FALSE)
+        cat(x, '\n')
+        ptm <- proc.time()
+        return(ptm)
+ }
+ stopTimedMessage <- function(ptm) {
+        time <- proc.time() - ptm
+        #message(" ", round(time[3],2), "s")
+        cat(" ", round(time[3],2), "s", '\n')
+ }
+ # Copy def to help_DIR
+ dput(startTimedMessage, file.path(help_DIR, 'startTimedMessage.r'))
+ dput(stopTimedMessage, file.path(help_DIR, 'stopTimedMessage.r'))
+
+ # help
+ ################################################
+ static_help <- function(pkg, topic, out, links = tools::findHTMLlinks()) {
+  pkgRdDB = tools:::fetchRdDB(file.path(find.package(pkg), 'help', pkg))
+  force(links)
+  tools::Rd2HTML(pkgRdDB[[topic]], out, package = pkg,
+                 Links = links, no_links = is.null(links))
+ }
+
+```
+<!-- ######################################################################## -->
+
+
+<!-- NOT SURE WHAT IS THE BEST PLACE TO PUT THIS -->
+
+
+
+```{r setup, include=FALSE, eval=T,cache=F}
+## DO THIS ???
+knitr::opts_chunk$set(
+  cache = TRUE,
+  cache.lazy = FALSE,
+  cache.vars = '',
+  tidy = FALSE
+)
+```
+
+<!-- START HERE -->
+
+```{r decentHelp, echo=FALSE, cache=TRUE, cache.vars='DECENT.decent.path',eval=F}
+ # CHANGE TO CLEAR CACHE
+ DECENT.decent.path <- file.path(help_DIR, 'DECENT.decent.html')
+ static_help("DECENT", "decent", out=DECENT.decent.path)
+```
+<!-- ######################################################################## -->
+
+
+```{r NormalizeDatahelp, echo=FALSE, cache=TRUE, cache.vars='Seurat.NormalizeData.path'}
+ # CHANGE TO CLEAR CACHE
+ Seurat.NormalizeData.path <- file.path(help_DIR, 'Seurat.NormalizeData.html')
+ static_help("Seurat", "NormalizeData", out=Seurat.NormalizeData.path)
+```
+<!-- ######################################################################## -->
+
+
+# Abstract   
+
+In this analysis, we will combine some if the 10X summary metrics with
+usual read based QC metrics to get a fuller picture of quality for all of the 
+samples processed on a chip (chip8).  We will follow the `scone` package workflow
+to examine QC features of the data and evaluate the effect of different normalizations.
+
+For the purpose of this analyis, we will sample `r 100*CELL_FRAC`% of the cells within each sample.
+Sampling a fixed percentage of the cells will maintain the differences in the number
+of cells sequenced for each sample and should be adequate to get a representative sample of cells.
+
+***  
+
+* Time = `r date()`
+```{r loadMetricSummaries, cache=T, cache.vars=c('DD.Metrics.frm', 'SampleLong.vec'),eval=F}
+
+ METRICS_FILES <- setdiff(list.files(file.path(DATA_ROOT, '_MetricsSummaries')), 
+         grep('all_metrics', list.files(file.path(DATA_ROOT, '_MetricsSummaries')), value=T))
+
+ SampleLong.vec <- sapply(strsplit(METRICS_FILES, split='_'), function(x) paste(x[1], x[2], sep='_'))
+ SampleID.vec <- sapply(strsplit(METRICS_FILES, split='_'),'[',2)
+ names(SampleLong.vec) <- SampleID.vec
+
+ DD.Metrics.frm <- do.call('rbind', lapply(METRICS_FILES, function(FF)
+   read.csv(file.path(DATA_ROOT, '_MetricsSummaries',FF),stringsAsFactors = FALSE)))
+
+ names(DD.Metrics.frm) <- 
+ sub("Estimated.Number.of.Cells", "EstNoCells",
+ sub("Mean.Reads.per.Cell", "MeanReads",                           
+ sub("Median.Genes.per.Cell", "MedianGenes",                         
+ sub("Number.of.Reads", "TotalReads",                                
+ sub("Valid.Barcodes", "ValidBarcodes",                                
+ sub("Reads.Mapped.Confidently.to.Transcriptome", 'ReadsTrans', 
+ sub("Reads.Mapped.Confidently.to.Exonic.Regions", 'ReadsExon',   
+ sub("Reads.Mapped.Confidently.to.Intronic.Regions", 'ReadsIntron',
+ sub("Reads.Mapped.Confidently.to.Intergenic.Regions", 'ReadsInter',
+ sub("Reads.Mapped.Antisense.to.Gene", 'ReadsAntiGene',                
+ sub("Sequencing.Saturation", 'SeqSat',                         
+ sub("Q30.Bases.in.Barcode", 'Q30Barcode',                           
+ sub("Q30.Bases.in.RNA.Read", 'Q30RNARead',                         
+ sub("Q30.Bases.in.Sample.Index", 'Q30Index',                     
+ sub("Q30.Bases.in.UMI", 'Q30UMI',                              
+ sub("Fraction.Reads.in.Cells", 'FracReadsInCells',                       
+ sub("Total.Genes.Detected", 'TotalGenes',                          
+ sub("Median.UMI.Counts.per.Cell", 'MedianUMI',
+ names(DD.Metrics.frm)
+))))))))))))))))))
+
+ DD.Metrics.frm <- as.data.frame(lapply(DD.Metrics.frm, function(LL)
+   as.numeric(sub('%', '', gsub(',', '', LL)))))
+ DD.Metrics.frm %<>% mutate(TotalReads = TotalReads/1e6)
+ DD.Metrics.frm <- data.frame(SampleID = SampleID.vec, DD.Metrics.frm)
+ kable(DD.Metrics.frm)
+
+```
+* Time = `r date()`
+ 
+#  Get cell cycle pathways from reactome G1_S, G2_M
+```{r getCC, cache.vars=c('ccGenes.vec'),eval=F}
+
+ load(paste(BASEDIR,'/QCData/CODE/genesets_custom/oct2016/estimate_pw_cc.RData',sep="/"))
+ ccycle <- estimate_pw_cc[c(8,9)]; 
+ str(ccycle)   
+
+ ccGenes.vec <- unique(as.character(unlist(ccycle)));
+ length(ccGenes.vec)
+
+```
+
+
+```{r read10Xhelp, echo=FALSE, cache=TRUE, cache.vars='Seurat.Read10X.path',eval=F}
+ # CHANGE TO CLEAR CACHE
+ Seurat.Read10X.path <- file.path(help_DIR, 'Seurat.Read10X.html')
+ static_help("Seurat", "Read10X", out=Seurat.Read10X.path)
+```
+<!-- ######################################################################## -->
+
+# Read Data, Filter Cells and Genes, Normalize and Pool
+
+
+* Time = `r date()`
+```{r loadData,  message=FALSE,cache.vars=c('DD.FracCount.SE'),eval=F}
+
+ # This will take a  couple of minutes
+start.tm <- startTimedMessage()
+
+ R10X.lst <- lapply(names(SampleLong.vec), function(SAMP) 
+ Read10X(data.dir = file.path(DATA_ROOT,SampleLong.vec[SAMP], 'filtered_gene_bc_matrices/GRCh38')))
+
+stopTimedMessage(start.tm)
+
+ names(R10X.lst) <- names(SampleLong.vec)
+ t(sapply(R10X.lst, dim))
+ 
+ # Subset cells from each sample
+ R10X.lst <- lapply(R10X.lst, function(LL) LL[, base::sample(1:ncol(LL), size=round(CELL_FRAC*ncol(LL)))])
+ t(sapply(R10X.lst, dim))
+
+ # Assemble into a data.frame 
+ # and makeSummarizedExperimentFromDataFrame
+ DD.FracCount.frm <- do.call('cbind', lapply(names(R10X.lst),
+ function(SAMP) {Mtx <- as.matrix(R10X.lst[[SAMP]]); colnames(Mtx) <- paste0(SAMP,'_',colnames(Mtx));Mtx}))
+ dim(DD.FracCount.frm)
+
+ # remove zero rows
+ DD.FracCount.frm <- DD.FracCount.frm[rowSums(DD.FracCount.frm>0)>0,]
+ dim(DD.FracCount.frm)
+ 
+
+ # Done with counts
+ # Now assemble the colData 0 cell attributes
+
+ # Biological Sample 
+ SampleID.vec <- sapply(strsplit(colnames(DD.FracCount.frm), split='_'),'[',1)
+
+ # Add pctMito
+ mito.genes <- grep(pattern = "^MT-", rownames(DD.FracCount.frm), value = TRUE)
+ pctMito.vec <- 100*Matrix::colSums(DD.FracCount.frm[mito.genes, ]) / Matrix::colSums(DD.FracCount.frm)
+
+ # Add Cell Cycle
+ ccGenes.vec <- intersect(rownames(DD.FracCount.frm), ccGenes.vec)
+ pctCC.vec <-  100*Matrix::colSums(DD.FracCount.frm[ccGenes.vec, ]) / Matrix::colSums(DD.FracCount.frm)
+
+
+ # nUMI
+ nUMI.vec <- Matrix::colSums(DD.FracCount.frm, na.rm=T)
+
+ 
+ # nGenes
+ nGene.vec <- Matrix::colSums(DD.FracCount.frm>0, na.rm=T)
+ 
+ DD.FracCount.SE <- SummarizedExperiment(
+   assays=list(counts=DD.FracCount.frm),
+   colData=data.frame(SampleID = SampleID.vec, pctMito=pctMito.vec, 
+                     pctCC=pctCC.vec, nUMI=nUMI.vec, nGene=nGene.vec))
+
+ dir.create(file.path(WRKDIR, 'Data_MCA'))
+ saveObj(paste0(DD,'.Frac_',formatC(100*CELL_FRAC, width=2, flag='0'),'Count.SE'), 
+         'DD.FracCount.SE', DataDir=file.path(WRKDIR, 'Data_MCA') )
+ 
+```
+* Time = `r date()`
+
+## Visualizing Technical Variability 
+
+```{r viewTechVar, fig.height=8, fig.width=11, fig.cap='Technical Variability',cache.vars=c('DD.FracCount.SE','Sample.col')}
+  kelly.colours <- c("gold2", "plum4", "darkorange1", "lightskyblue2", 
+                     "firebrick", "burlywood3", "gray51", "springgreen4", "lightpink2", 
+                     "deepskyblue4", "lightsalmon2", "mediumpurple4", "orange", "maroon", 
+                     "gray95", "gray13", "yellow3", "brown4", "yellow4", "sienna4", "chocolate", "gray19")
+
+
+ loadObj(paste0(DD,'.Frac_',formatC(100*CELL_FRAC, width=2, flag='0'),'Count.SE'),
+         'DD.FracCount.SE', DataDir=file.path(WRKDIR, 'Data_MCA') )
+
+ names(colData(DD.FracCount.SE))
+
+ SampleID.vec <- factor(colData(DD.FracCount.SE)$SampleID)
+ 
+ Sample.col <- kelly.colours[1:length(unique(SampleID.vec))]
+ names(Sample.col) <- unique(SampleID.vec)
+
+
+ par(mfrow=c(4,1), mar=c(1,3,2,1), oma=c(7,0,0,0))
+
+ for(VAR in setdiff(names(colData(DD.FracCount.SE)),'SampleID')){
+  tmp <- split(colData(DD.FracCount.SE)[, VAR], SampleID.vec)
+   boxplot(tmp, col=Sample.col[names(tmp)], xaxt='n', outline=F, main=VAR)
+ } 
+ axis(side=1, outer=F, at=1:length(tmp), names(tmp), las=2)
+ 
+
+```
+
+## Drop-out characteristics
+
+Before we move on to normalization, let’s briefly consider a uniquely single-cell 
+problem: “drop-outs.” One of the greatest challenges in modeling drop-out effects
+is modeling both i) technical drop-outs and ii) biological expression heterogeneity.
+One way to simplify the problem is to focus on genes for which we have strong
+prior belief in true expression. The scone package contains lists of genes that are
+believed to be ubiquitously and even uniformly expressed across human tissues.
+If we assume these genes are truly expressed in all cells, we can label all zero
+abundance observations as drop-out events. We model detection failures as a
+logistic function of mean expression, in line with the standard logistic model
+for drop-outs employed by the field:
+
+* Time = `r date()`
+```{r dropOutFit, cache.vars=c('hk.vec', 'ref.glms'), include=F}
+ # Extract Housekeeping Genes
+ data(housekeeping)
+ hk.vec = intersect(housekeeping$V1,rownames(assay(DD.FracCount.SE)))
+
+ length(hk.vec)
+
+ # Mean log10(x+1) expression
+ mu_obs.vec = rowMeans(log10(assay(DD.FracCount.SE)[hk.vec,]+1))
+
+ # Assumed False Negatives
+ drop_outs.mtx = assay(DD.FracCount.SE)[hk.vec,] == 0
+
+ # Logistic Regression Model of Failure
+ ref.glms = list()
+ for (CELL in colnames(drop_outs.mtx)){
+   fit = glm(cbind(drop_outs.mtx[,CELL],1 - drop_outs.mtx[,CELL]) ~ mu_obs.vec,
+             family=binomial(logit))
+   ref.glms[[CELL]] = fit$coefficients
+ }
+
+```
+* Time = `r date()`
+
+The list ref.glm contains the intercept and slope of each fit.
+We can now visualize the fit curves and the corresponding Area Under the Curves (AUCs):
+
+```{r dropOutAUC, fig.height=12, fig.width=11, fig.cap='Drop-out Fits'}
+ par(mfrow=c(2,1), mar=c(3,4,2,1),oma=c(6,0,0,0))
+ 
+ # Plot Failure Curves and Calculate AUC
+ plot(NULL, main = "False Negative Rate Curves",
+      ylim = c(0,1),xlim = c(0,2), 
+      ylab = "Failure Probability", xlab = "Mean log10 Expression")
+ x = (0:60)/10
+
+ AUC <- NULL
+ for(CELL in sample(names(ref.glms), size=200)){
+   y = 1/(exp(-ref.glms[[CELL]][1] - ref.glms[[CELL]][2] * x) + 1)
+   AUC[CELL] = sum(y)/10
+   lines(x, 1/(exp(-ref.glms[[CELL]][1] - ref.glms[[CELL]][2] * x) + 1),
+         type = 'l', lwd = 2, col = Sample.col[sapply(strsplit(CELL, split='_'),'[',1)])
+ }
+ 
+ AUC.vec <- sapply(ref.glms, function(FIT) sum(1/(exp(-FIT[1] - FIT[2] * x) + 1))/10)
+ 
+ # boxplot AUC
+ AUC.lst <- split(AUC.vec, sapply(strsplit(names(AUC.vec), split='_'),'[',1))
+ 
+ boxplot(AUC.lst, col=Sample.col[names(AUC.lst)], las=2,
+         main="FNR AUC")
+ 
+```
+* Time = `r date()`
+
+## The `scone` Workflow
+
+The basic QC and normalization pipeline in `scone` allows us to:
+
+* Filter out poor libraries using the `metric_sample_filter` function.
+* Run and score many different normalization workflows
+(different combinations of normalization modules) using the main `scone` function.
+* Browse top-ranked methods and visualize trade-offs with the `biplot_color` and
+`sconeReport` function.
+
+
+In order to run many different workflows, SCONE relies on a normalization workflow template composed of 3 modules:
+
+1. Data imputation: replacing zero-abundance values with expected values under a prior drop-out model. As we will see below, this module may be used as a modifier for module 2, without passing imputed values forward to downstream analyses. 2) Scaling or quantile normalization: either i) normalization that scales each sample’s transcriptome abundances by a single factor or ii) more complex offsets that match quantiles across samples. Examples: TMM or DESeq scaling factors, upper quartile normalization, or full-quantile normalization.
+
+2. Regression-based approaches for removing unwanted correlated variation from the data, including batch effects. Examples: RUVg (Risso et al. 2014) or regression on Quality Principal Components described above.
+
+
+# Sample Filtering with `metric_sample_filter`
+
+The most basic sample filtering function in scone is the `metric_sample_filter`.
+The function takes a consensus approach, retaining samples that pass multiple data-driven criteria.
+
+`metric_sample_filter` takes as input an expression matrix.
+The output depends on arguments provided, but generally consists of a list of 4 logicals
+designating each sample as having failed (TRUE) or passed (FALSE) threshold-based filters on 4 sample metrics:
+
+* Number of reads.  
+* Ratio of reads aligned to the genome. Requires the ralign argument.
+* “Transcriptome breadth” - Defined here as the proportion of “high-quality” genes
+detected in the sample. Requires the `gene_filter` argument.
+* FNR AUC. Requires the `pos_controls` argument.
+
+If required arguments are missing for any of the 4, the function will simply return NA
+instead of the corresponding logical.
+ 
+* Time = `r date()`
+```{r initGeneFilter, fig.height=8, fig.width=11, cache.vars=c('mfilt.lst','goodDat.SE','is_qualityGene.vec')}
+
+ # Initial Gene Filtering: 
+ # Select "common" transcripts based on proportional criteria.
+ num_reads = quantile(assay(DD.FracCount.SE)[assay(DD.FracCount.SE) > 0])[4]
+ num_cells = 0.25*ncol(DD.FracCount.SE)
+ is_common.vec = rowSums(assay(DD.FracCount.SE) >= num_reads ) >= num_cells
+ 
+ # Metric-based Filtering
+ mfilt.lst = metric_sample_filter(assay(DD.FracCount.SE),
+                              nreads = colData(DD.FracCount.SE)$NREADS,
+                              ralign = colData(DD.FracCount.SE)$RALIGN,
+                              gene_filter = is_common.vec,
+                              pos_controls = rownames(DD.FracCount.SE) %in% hk.vec,
+ 
+                              zcut = 3, mixture = FALSE,
+                              plot = TRUE)
+ 
+ # Simplify to a single logical
+ mfilt.vec = !apply(simplify2array(mfilt.lst[!is.na(mfilt.lst)]),1,any)
+
+ summary(mfilt.vec)
+
+ # Apply the sample filter
+ goodDat.SE <- DD.FracCount.SE[, mfilt.vec]
+
+ # Final Gene Filtering: Highly expressed in at least 5 cells
+ num_reads = quantile(assay(DD.FracCount.SE)[assay(DD.FracCount.SE) > 0])[4]
+ num_reads
+
+ num_cells = 5
+ is_qualityGene.vec  = rowSums(assay(DD.FracCount.SE) >= num_reads ) >= num_cells
+
+ cat("Quality Genes with at least", num_reads, "reads in at least ", num_cells, 'cells\n')
+ print(summary(is_qualityGene.vec))
+
+```
+* Time = `r date()`
+
+
+# Running and Scoring Normalization Workflows with  `scone`
+
+## Creating a SconeExperiment Object
+
+Prior to running main `scone` function we will want to define a 
+`SconeExperiment` object that contains the primary expression data,
+experimental metadata, and control gene sets.
+
+* Time = `r date()`
+```{r sconeInit, cache.vars='DD.FracCount.ScEx'}
+ 
+ # Expression Data (Required)
+ expr.mtx = assay(goodDat.SE)[is_qualityGene.vec,]
+ 
+ # Biological Origin - Variation to be preserved (Optional)
+ SampleID.vec = factor(colData(goodDat.SE)$SampleID)
+ 
+ # Processed Alignment Metrics - Variation to be removed (Optional)
+ qc.DF = colData(goodDat.SE)[,c("pctMito"), drop=F]
+
+ # Scale qc (???)
+ scaledQC.mtx = scale(qc.DF[,apply(qc.DF,2,sd) > 0],center = TRUE,scale = TRUE)
+ 
+ # Positive Control Genes - Prior knowledge of DE (Optional)
+SKIP <- function() {
+ poscon = intersect(rownames(expr),strsplit(paste0("ALS2, CDK5R1, CYFIP1,",
+                                                   " DPYSL5, FEZ1, FEZ2, ",
+                                                   "MAPT, MDGA1, NRCAM, ",
+                                                   "NRP1, NRXN1, OPHN1, ",
+                                                   "OTX2, PARD6B, PPT1, ",
+                                                   "ROBO1, ROBO2, RTN1, ",
+                                                   "RTN4, SEMA4F, SIAH1, ",
+                                                   "SLIT2, SMARCA1, THY1, ",
+                                                   "TRAPPC4, UBB, YWHAG, ",
+                                                   "YWHAH"),split = ", ")[[1]])
+ }
+ # We're going to FAKE IT here.
+ geneMad.vec <- apply(expr.mtx,1,mad)
+ # Take the 98-99th percentile as the DEgs
+ geneMadp98.vec <- quantile(geneMad.vec, prob=c(.98, .99))
+ 
+ posCon.vec <- names(geneMad.vec)[(geneMadp98.vec[1] < geneMad.vec) & 
+                                  (geneMad.vec < geneMadp98.vec[2] )]
+
+
+ # Negative Control Genes - Uniformly expressed transcripts (Optional)
+ negCon.vec = intersect(rownames(expr.mtx),hk.vec)
+ 
+ # Creating a SconeExperiment Object
+ DD.FracCount.ScEx <- SconeExperiment(
+                 expr.mtx,
+                 qc=scaledQC.mtx, 
+                 bio = SampleID.vec,
+                 negcon_ruv = rownames(expr.mtx) %in% negCon.vec,
+                 poscon = rownames(expr.mtx) %in% posCon.vec
+                  )
+
+ saveObj(paste0(DD, '.FracCount.ScEx'), 'DD.FracCount.ScEx', DataDir=file.path(WRKDIR, 'Data_MCA')) 
+
+```
+* Time = `r date()`
+ 
+## Defining Normalization Modules
+
+Before we can decide which workflows (normalizations) we will want to compare,
+we will also need to define the types of scaling functions we will consider in
+the comparison of normalizations:
+
+
+* Time = `r date()`
+```{r defNormMod, cache.vars=c('scaling.lst', 'EFF_FN')}
+ 
+ EFF_FN = function (ei)
+ {
+   sums = colSums(ei > 0)
+   eo = t(t(ei)*sums/mean(sums))
+   return(eo)
+ }
+ 
+ ## ----- Scaling Argument -----
+ 
+ scaling.lst <- list(none=identity, # Identity - do nothing
+                     eff = EFF_FN, # User-defined function
+                     sum = SUM_FN, # SCONE library wrappers...
+                     tmm = TMM_FN, 
+                     uq = UQ_FN,
+                     fq = FQT_FN,
+                     deseq = DESEQ_FN)
+
+```
+
+If imputation is to be included in the comparison, imputation arguments must also be provided by the user:
+
+* Time = `r date()`
+```{r impute, cache.vars='DD.FracCount.scone'}
+
+  # Simple FNR model estimation with SCONE::estimate_ziber
+  fnr_out = estimate_ziber(x = expr.mtx, bulk_model = TRUE,
+                           pos_controls = rownames(expr.mtx) %in% hk.vec,
+                           maxiter = 1000)
+  
+  ## ----- Imputation List Argument -----
+  imputation=list(none=impute_null, # No imputation
+                  expect=impute_expectation) # Replace zeroes
+  
+  ## ----- Imputation Function Arguments -----
+  # accessible by functions in imputation list argument
+  impute_args = list(p_nodrop = fnr_out$p_nodrop, mu = exp(fnr_out$Alpha[1,]))
+  
+  DD.FracCount.scone <- scone(DD.FracCount.ScEx,
+                  imputation = imputation, impute_args = impute_args,
+                  scaling=scaling.lst,
+                  k_qc=3, k_ruv = 3,
+                  adjust_bio="no",
+                  run=F) 
+
+  # this takes a while - save v1
+  saveObj(paste0(DD, '.FracCount.scone'), 'DD.FracCount.scone', DataDir=file.path(WRKDIR, 'Data_MCA')) 
+```
+* Time = `r date()`
+
+## Selecting SCONE Workflows
+
+The main `scone` method arguments allow for a lot of flexibility,
+but a user may choose to run very specific combinations of modules.
+For this purpose, `scone` can be run in `run=FALSE` mode, generating a
+list of workflows to be performed and storing this list within a
+`SconeExperiment` object. After running this command the list can be
+extracted using the `get_params` method.
+
+```
+my_scone <- scone(my_scone,
+                scaling=scaling.lst,
+                k_qc=3, k_ruv = 3,
+                adjust_bio="no",
+                run=FALSE)
+
+head(get_params(my_scone))
+
+##                                 imputation_method scaling_method uv_factors
+## none,none,no_uv,no_bio,no_batch              none           none      no_uv
+## none,eff,no_uv,no_bio,no_batch               none            eff      no_uv
+## none,sum,no_uv,no_bio,no_batch               none            sum      no_uv
+## none,tmm,no_uv,no_bio,no_batch               none            tmm      no_uv
+## none,uq,no_uv,no_bio,no_batch                none             uq      no_uv
+## none,fq,no_uv,no_bio,no_batch                none             fq      no_uv
+##                                 adjust_biology adjust_batch
+## none,none,no_uv,no_bio,no_batch         no_bio     no_batch
+## none,eff,no_uv,no_bio,no_batch          no_bio     no_batch
+## none,sum,no_uv,no_bio,no_batch          no_bio     no_batch
+## none,tmm,no_uv,no_bio,no_batch          no_bio     no_batch
+## none,uq,no_uv,no_bio,no_batch           no_bio     no_batch
+## none,fq,no_uv,no_bio,no_batch           no_bio     no_batch
+```
+
+In the call above, we have set the following parameter arguments:
+
+* k_ruv = 3. The maximum number of RUVg factors to consider.  
+* k_qc = 3. The maximum number of quality PCs (QPCs) to be included in a linear model, analogous to RUVg normalization. The qc argument must be provided.  
+* adjust_bio = “no.” Biological origin will NOT be included in RUVg or QPC regression models. The bio argument will be provided for evaluation purposes.  
+
+
+These arguments translate to the following set of options:
+
+```
+apply(get_params(my_scone),2,unique)
+
+## $imputation_method
+## [1] "none"
+## 
+## $scaling_method
+## [1] "none"  "eff"   "sum"   "tmm"   "uq"    "fq"    "deseq"
+## 
+## $uv_factors
+## [1] "no_uv"   "ruv_k=1" "ruv_k=2" "ruv_k=3" "qc_k=1"  "qc_k=2"  "qc_k=3" 
+## 
+## $adjust_biology
+## [1] "no_bio"
+## 
+## $adjust_batch
+## [1] "no_batch"
+```
+
+Some scaling methods, such as scaling by gene detection rate (EFF_FN()), will not make sense within the context of imputed data, as imputation replaces zeroes with non-zero values. We can use the select_methods method to produce a SconeExperiment object initialized to run only meaningful normalization workflows.
+
+```
+is_screened = ((get_params(my_scone)$imputation_method == "expect") &
+                 (get_params(my_scone)$scaling_method %in% c("none",
+                                                             "eff")))
+
+my_scone = select_methods(my_scone,
+                          rownames(get_params(my_scone))[!is_screened ])
+
+```
+
+## Calling `scone` with `run=TRUE`
+
+Now that we have selected our workflows, we can run `scone` in `run=TRUE` mode.
+As well as arguments used in `run=FALSE` mode, this mode relies on a few additional arguments.
+In order to understand these arguments, we must first understand the 8 metrics used to evaluate
+each normalization. The first 6 metrics rely on a reduction of the normalized data down to
+3 dimensions via PCA (default). Each metric is taken to have a positive (higher is better) or
+negative (lower is better) signature.
+
+* BIO_SIL: Preservation of Biological Difference. The average silhouette width of clusters defined by bio, defined with respect to a Euclidean distance metric over the first 3 expression PCs. Positive signature.  
+
+* BATCH_SIL: Removal of Batch Structure. The average silhouette width of clusters defined by batch, defined with respect to a Euclidean distance metric over the first 3 expression PCs. Negative signature.  
+
+* PAM_SIL: Preservation of Single-Cell Heterogeneity. The maximum average silhouette width of clusters defined by PAM clustering, defined with respect to a Euclidean distance metric over the first 3 expression PCs. Positive signature.  
+
+* EXP_QC_COR: Removal of Alignment Artifacts. R^2 measure for regression of first 3 expression PCs on first k_qc QPCs. Negative signature.  
+
+* EXP_UV_COR: Removal of Expression Artifacts. R^2 measure for regression of first 3 expression PCs on first 3 PCs of the negative control (specified by eval_negcon or  ruv_negcon by default) sub-matrix of the original (raw) data. Negative signature.  
+
+* EXP_WV_COR: Preservation of Biological Variance. R^2 measure for regression of first 3 expression PCs on first 3 PCs of the positive control (specified by eval_poscon) sub-matrix of the original (raw) data. Positive signature.  
+
+* RLE_MED: Reduction of Global Differential Expression. The mean squared-median Relative Log Expression (RLE). Negative signature.  
+
+* RLE_IQR: Reduction of Global Differential Variability. The variance of the inter-quartile range (IQR) of the RLE. Negative signature.  
+
+In the call below, we have set the following parameter arguments:
+
+* eval_kclust = 2:6. For PAM_SIL, range of k (# of clusters) to use when computing maximum average silhouette width of PAM clusterings.
+* stratified_pam = TRUE. For PAM_SIL, apply separate PAM clusterings to each biological batch rather than across all batches. Average is weighted by batch group size.
+* return_norm = “in_memory”. Store all normalized matrices in addition to evaluation data. Otherwise normalized data is not returned in the resulting object.
+* zero = “postadjust”. Restore data entries that are originally zeroes / negative after normalization to zero after the adjustment step.
+
+* Time = `r date()`
+```{r runScone, cache.vars=c('DD.FracCount2.scone','out_norm')}
+ BiocParallel::register(
+   BiocParallel::SerialParam()
+ ) # Register BiocParallel Serial Execution
+ 
+ loadObj(paste0(DD, '.FracCount.scone'), 'DD.FracCount.scone', DataDir=file.path(WRKDIR, 'Data_MCA')) 
+
+ #get_params(DD.FracCount.scone)
+
+ is_screened = ((get_params(DD.FracCount.scone)$imputation_method == "none") &
+                (get_params(DD.FracCount.scone)$scaling_method %in% c("none",
+                                                               "eff")))
+  
+ DD.FracCount2.scone = select_methods(DD.FracCount.scone,
+                           rownames(get_params(DD.FracCount.scone))[!is_screened ])
+
+ ###
+ DD.FracCount2.scone <- DD.FracCount.scone
+
+ ### THIS DOESNT WORK!!!
+ DD.FracCount2.scone <- scone(DD.FracCount2.scone,
+                   scaling=scaling.lst,
+                   run=TRUE,
+                   eval_kclust = 2:6,
+                   stratified_pam = TRUE,
+                   return_norm = "in_memory",
+                   zero = "postadjust",
+                   verbose=T)
+### ERROR MESSAGE:
+#Imputation step...
+#Error in imputation[[im_params[i]]](assay(x), impute_args) : 
+  #attempt to apply non-function
+
+# I HAVE NO IDEA HOW TO FIX THIS!!!!
+
+
+
+ saveObj(paste0(DD, '.FracCount2.scone'), 'DD.FracCount2.scone', DataDir=file.path(WRKDIR, 'Data_MCA')) 
+ 
+ head(get_scores(DD.FracCount2.scone))
+
+ # View Mean Score Rank
+ head(get_score_ranks(DD.FracCount2.scone))
+
+
+ # Extract normalized data from top method
+ out_norm = get_normalized(DD.FracCount2.scone,
+                          method = rownames(get_params(DD.FracCount2.scone))[1])
+
+```
+* Time = `r date()`
+
+`get_scores` returns the 8 raw metrics for each normalization multiplied by their signature -
+or “scores.” `get_score_ranks` returns the mean score rank for each normalization.
+Both of these are sorted in decreasing order by mean score rank. Finally `get_normalized` returns the normalized expression data for the requested method. If the normalized data isn’t stored in the object it will be recomputed.
+
+# Selecting a normalization for downstream analysis
+
+A useful way to visualize methods with respect to others is the `biplot_color` function.
+
+```{r biplot, fig.height=6, fig.width=11, fig.cap="Comparing Normalization Methods using a biplot"}
+ pc_obj = prcomp(apply(t(get_scores(DD.FracCount2.scone)),1,rank),
+                center = TRUE,scale = FALSE)
+
+ bp_obj = biplot_color(pc_obj,y = -get_score_ranks(DD.FracCount2.scone),expand = .6) 
+
+```
+
+<!--
+We have colored each point above according the corresponding method’s
+mean score rank (yellow vs blue ~ good vs bad), and we can see that workflows
+span a continuum of metric performance. Most importantly - and perhaps to no surprise -
+there is evidence of strong trade-offs between i) Preserving clustering and wanted
+variation and ii) removing unwanted variation. At roughly 90 degrees to this axis
+is a direction in which distributional properties of relative log-expression
+(RLE_MED and RLE_IQR) improve. Let’s visualize the top-performing method
+and it’s relation to un-normalized data (“no-op” normalization):
+-->
+
+```{r annotateBiplot, eval=F}
+
+  bp_obj = biplot_color(pc_obj,y = -get_score_ranks(my_scone),expand = .6)
+  
+  points(t(bp_obj[1,]), pch = 1, col = "red", cex = 1)
+  points(t(bp_obj[1,]), pch = 1, col = "red", cex = 1.5)
+  
+  points(t(bp_obj[rownames(bp_obj) == "none,none,no_uv,no_bio,no_batch",]),
+         pch = 1, col = "blue", cex = 1)
+  points(t(bp_obj[rownames(bp_obj) == "none,none,no_uv,no_bio,no_batch",]),
+         pch = 1, col = "blue", cex = 1.5)
+  
+  arrows(bp_obj[rownames(bp_obj) == "none,none,no_uv,no_bio,no_batch",][1],
+         bp_obj[rownames(bp_obj) == "none,none,no_uv,no_bio,no_batch",][2],
+         bp_obj[1,][1],
+         bp_obj[1,][2],
+         lty = 2, lwd = 2)
+  
+```
+
+
+# References
+<div id="refs"></div>
+
+# Appendix
+## User defined functions used in this script: 
+
+- [saveObj](`r file.path(help_DIR, 'saveObj.r')`) and
+[loadObj](`r file.path(help_DIR, 'loadObj.r')`) are used 
+to move objects between the file system and the workspace.
+
+- [startTimedMessage](`r file.path(help_DIR, 'startTimedMessage.r')`) and 
+ [stopTimedMessage](`r file.path(help_DIR, 'stopTimedMessage.r')`) are computing time traclking functions.
+
+
+## Parameter settings
+  * WRKDIR = `r WRKDIR`
+  * FN = `r FN`
+  * Scripts = Scripts
+  * RUN DATE = `r date()`
+
+
+## Session Info
+
+```{r, echo=FALSE}
+ sessionInfo()
+```
+
+
+```{r, echo=FALSE}
+  knit_exit()
+```
+
+<!-- ### ARCHIVAL CODE BELOW -->
+
+
+<!-- To run
+
+# Or
+
+# nohup Rscript -e "rmarkdown::render('MCA-Chip8Scone.Rmd')" > MCA-Chip8Scone.log  &
+
+# nohup Rscript -e "knitr::knit2html('MCA-Chip8Scone.Rmd')" > MCA-Chip8Scone.log  &
+
+
+-->
+

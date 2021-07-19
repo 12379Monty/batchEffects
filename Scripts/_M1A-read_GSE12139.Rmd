@@ -1,0 +1,425 @@
+---
+title: "Batch Effects Analysis - Get GSE121239 Data from GEO"
+#subtitle: "Under Construction - For Discussion Only"
+author: "fcollin@grailbio.com"
+date: '`r format(Sys.time(), "%a %b %d %Y", tz="America/Los_Angeles")`' 
+output:
+  BiocStyle::html_document:
+    code_folding: hide
+    toc: true
+    # does this have an effect
+    fig_caption: yes
+    # this has no effect
+    number_sections: yes
+    css: ['../_css/pandoc3.css', '../_css/myMargins.css']
+bibliography: [../_bib/BatchEffect.bib]
+csl: ../_csl/cell-numeric.csl
+link-citations: true
+---
+ 
+<!-- EXCLUDE THESE STYLES
+h2 {
+  background-color: #D4DAEC;
+    text-indent: 100px;
+}
+h3 {
+  background-color: #dddddd;
+}
+.main-container {
+  max-width: 1100px !important;
+}
+-->
+
+<style>
+@import url('https://fonts.googleapis.com/css?family=Raleway');
+@import url('https://fonts.googleapis.com/css?family=Oxygen');
+@import url('https://fonts.googleapis.com/css?family=Raleway:bold');
+@import url('https://fonts.googleapis.com/css?family=Oxygen:bold');
+
+.main-container {
+  max-width: 900px !important;
+}
+
+body{
+  font-family: 'Oxygen', sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+h1,h2,h3,h4 {
+  font-family: 'Raleway', sans-serif;
+}
+
+.container { width: 1400px; }
+
+
+caption {
+  font-size: 20px;
+  caption-side: top;
+  text-indent: 30px;
+  background-color: lightgrey;
+  color: black;
+  margin-top: 5px;
+}
+
+g-table-intro h4 {
+  text-indent: 0px;
+}
+</style>
+
+
+```{r m1a-GlobalOptions, results="hide", include=FALSE, cache=FALSE, out.width.px=1, out.height.px=1}
+
+knitr::opts_knit$set(stop_on_error = 2L) #really make it stop
+options(knitr.table.format = 'html')
+
+options(stringsAsFactors=F)
+
+#knitr::dep_auto()
+
+```
+<!-- ######################################################################## -->
+
+
+
+```{r m1a-Prelims,  include=FALSE, echo=FALSE, results='hide', message=FALSE, out.width.px=1, out.height.px=1} 
+
+FN <- "_M1A-read_GSE12139"
+if(sum(grepl(FN, list.files()))==0) stop("Check FN")
+
+ suppressMessages(require(rmarkdown))
+ suppressMessages(require(knitr))
+
+ suppressPackageStartupMessages(require(methods))
+ suppressPackageStartupMessages(require(bookdown))
+
+ suppressPackageStartupMessages(require(data.table))
+ options(datatable.fread.datatable=F)
+
+ suppressPackageStartupMessages(require(plyr))
+ suppressPackageStartupMessages(require(dplyr))
+ suppressPackageStartupMessages(require(magrittr))
+
+ # Shotcuts for knitting and redering while in R session (Invoke interactive R from R/Scripts folder)
+ kk <- function(n='') knitr::knit2html(paste("t", n, sep=''), envir=globalenv(),
+       output=paste(FN,".html", sep=''))
+
+ rr <- function(n='') rmarkdown::render(paste("t", n, sep=''), envir=globalenv(),
+       output_file=paste(FN,".html", sep='')) ##, output_dir='Scripts')
+
+ bb <- function(n='') browseURL(paste(FN,".html", sep=''))
+
+ # The usual shotcuts
+ zz <- function(n='') source(paste("t", n, sep=''))
+
+
+ WRKDIR <- '.'
+ if(!file.exists(WRKDIR)) stop("WRKDIR ERROR", WRKDIR)
+
+ # do once
+
+ # Shotcuts for knitting and redering while in R session
+ kk <- function(n='') knitr::knit2html(paste("t", n, sep=''), envir=globalenv(),
+       output=paste('',FN,".html", sep=''))
+
+ rr <- function(n='') render(paste("t", n, sep=''), envir=globalenv(),
+       output_file=paste(FN,".html", sep=''), output_dir='Scripts')
+
+ bb <- function(n='') browseURL(paste('',FN,".html", sep=''))
+
+ # The usual shorcuts
+ zz <- function(n='') source(paste('', "t", n, sep=''))
+
+ # file rmarkdown file management options: cache, figures
+ cache_DIR <- file.path(WRKDIR, 'cache/M1A/')
+ suppressMessages(dir.create(cache_DIR, recursive=T))
+ opts_chunk$set(cache.path=cache_DIR)
+
+ figures_DIR <- file.path(WRKDIR, 'figures/M1A/')
+ suppressMessages(dir.create(figures_DIR, recursive=T))
+ opts_chunk$set(fig.path=figures_DIR)
+
+ #tables_DIR <- file.path(WRKDIR, 'tables/M1A/')
+ #suppressMessages(dir.create(table_DIR, recursive=T))
+ #opts_chunk$set(fig.path=table_DIR)
+ 
+ # need a local copy of help_DIR
+ #help_DIR <- file.path(WRKDIR, 'help_files')
+ help_DIR <- file.path('.', 'help_files')
+ suppressMessages(dir.create(help_DIR, recursive=T))
+ 
+ temp_DIR <- file.path(WRKDIR, 'temp_files')
+ suppressMessages(dir.create(temp_DIR, recursive=T))
+
+```
+<!-- ######################################################################## -->
+
+
+*** 
+```{r m1a-utilityFns, out.width.px=1, out.height.px=1, echo=FALSE}
+ # Here we define some utility functions
+source('utilityFns.r')
+
+```
+
+<!-- ######################################################################## -->
+
+# Abstract
+
+In Yang et al. (2021) [@Yang:2021aa] the authors demonstrate the utility
+of UMAP (Uniform Manifold Approximation and Projection) 
+(see McInness et al. (2018) [@McInnes:2018aa]) in discovering sample
+heterogeneity among bulk transcriptomic data.  The authors analyzed 
+data from 71 bulk transcriptomic datasets with large sample sizes.
+In many datasets, known batch effects were verified.  In a few
+datasets, new batch efffect were uncovered. and in some
+cases an explanation for the newly uncervered source of systematic
+varibaility was arrived at.  In this script, we download
+the data from one such example from the
+GEO website:
+[GSE121239](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE121239).
+These data were reported on in
+Petri et al. (2019) [@Petri:2019aa] and 
+Toro-Dominguez et al. (2018) [@Toro-Dominguez:2018aa].
+
+
+
+***
+
+
+
+<br/>
+
+# Set Analysis parameters 
+
+```{r m1a-set-parameters, cache=F, out.width.px=1, out.height.px=1}
+
+GSE_ID <- "GSE121239"
+
+```
+
+
+* GSE_ID = `r GSE_ID`  
+
+
+# Load data from GEO for `r GSE_ID`
+
+
+
+
+```{r m1a-load-geo-data, cache=T, cache.vars='GSE.gset', out.width.px=1, out.height.px=1}
+#######################################################
+# load series and platform data from GEO
+#######################################################
+GSE.gset <- GEOquery::getGEO(GSE_ID, GSEMatrix =TRUE)
+
+# if (length(GSE.gset) > 1) idx <- grep("GPL11532", attr(GSE.gset, "names")) else idx <- 1
+if (length(GSE.gset) > 1) idx <- grep("GPL13158", attr(GSE.gset, "names")) else idx <- 1
+GSE.gset <- GSE.gset[[idx]]
+
+# make proper column names to match toptable
+Biobase::fvarLabels(GSE.gset) <- make.names(Biobase::fvarLabels(GSE.gset))
+
+saveObj(paste0(GSE_ID,'.gset'), 'GSE.gset')
+
+```
+
+
+
+```{r m1a-readSampDesc,cache=T, cach.vars=c('sampDesc_frm'), eval=T, echo=T, fig.height=6, fig.width=11, out.width.px=1, out.height.px=1}
+
+
+sampTitle_vec <- as.character(Biobase::pData(Biobase::phenoData(GSE.gset))[,"title"])
+
+sampV_vec <- sapply(strsplit(sampTitle_vec, split='_v'),'[', 2)
+sampName_vec <- sub('PBMC_','', sapply(strsplit(sampTitle_vec, split='_v'),'[', 1))
+
+
+sampAttribs_frm <- Biobase::pData(Biobase::phenoData(GSE.gset)) %>%
+ dplyr::select(ends_with(':ch1'))
+ 
+names(sampAttribs_frm) <- 
+ gsub(' ','_',
+ sub('imputed neutrophil percentage', 'imputedNeutrophilPerc',
+ sub(':ch1', '',
+ names(sampAttribs_frm))))
+
+sampDesc_frm <- data.frame(
+   title = sampTitle_vec,
+   geoAcc = Biobase::pData(Biobase::phenoData(GSE.gset))[,"geo_accession"],
+   sampName = sampName_vec,
+   sampV = sampV_vec,
+   sampAttribs_frm)
+
+sampDesc_frm %<>% dplyr::rename(diseaseState=disease_state, visitDate=visit_date)
+
+#str(sampDesc_frm)
+ 
+cat("geoAcc is unique - use as rownames:\n")
+with(sampDesc_frm, table(table(geoAcc, exclude=NULL)))
+rownames(sampDesc_frm) <- sampDesc_frm$geoAcc
+ 
+cat("title is unique:\n")
+with(sampDesc_frm, table(table(title, exclude=NULL)))
+
+cat("Some Samples Match by sampName:")
+with(sampDesc_frm, table(table(sampName, exclude=NULL)))
+
+cat("20 sapmName values occur once:\n")
+with(sampDesc_frm, table(sampName, exclude=NULL)[table(sampName, exclude=NULL)==1])
+
+DT::datatable(sampDesc_frm)
+```
+
+## Add sml to sampDesc_frm
+
+This code comes from 
+[transcriptomic_analysis_DGE_and_GSEA/transcriptomic_analysis_DGE_GSEA.R](transcriptomic_analysis_DGE_and_GSEA/transcriptomic_analysis_DGE_GSEA.R).
+From the context it appears that `sml` provides a new grouping factor.  I'm guessing it is
+the grouping that emerges form the clustering of samples under UMAP projections.
+
+```{r m1a-add-sml, cache=T, cache.vars='sampDesc_frm', out.width.px=1, out.height.px=1}
+
+
+### (this is a very weird sequence)
+
+# group
+gsms <-  paste0(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 3, 2,
+                2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 3, 3, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2,
+                1, 1, 1, 1, 2, 3, 3, 2, 1, 1, 1, 1, 2, 2, 1, 1, 2, 1, 1, 1, 2, 3,
+                3, 2, 2, 3, 3, 3, 3, 2, 2, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 2, 1, 1,
+                1, 1, 2, 2, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 2, 3, 3, 2, 2, 3, 2, 2,
+                2, 2, 3, 3, 3, 3, 2, 2, 2, 2, 3, 2, 3, 3, 3, 3, 2, 2, 3, 3, 3, 3,
+                3, 2, 2, 2, 2, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 2, 2,
+                2, 2, 2, 2, 2, 1, 1, 1, 3, 2, 3, 2, 1, 1, 1, 2, 2, 3, 3, 2, 2, 2,
+                2, 3, 3, 3, 3, 2, 2, 1, 1, 2, 2, 3, 3, 3, 3, 2, 2, 1, 1, 1, 2, 3,
+                3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 3, 3,
+                2, 2, 1, 1, 1, 2, 2, 1, 2, 2, 2, 3, 2, 3, 2, 2, 1, 1, 2, 2, 2, 2,
+                2, 1, 1, 1, 1, 1, 2, 3, 3, 3, 2, 2, 3, 3, 3, 2, 2, 2, 3, 2, 3, 3,
+                3, 2, 2, 3, 1, 1, 1, 2, 2, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 2, 2, 1,
+                1, 1, 2, 2, 2, 3, 3, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 2, 2, 2, 1, 1,
+                2, 2, 1, 1)
+
+sml_vec <- c()
+for (i in 1:nchar(gsms)) { sml_vec[i] <- substr(gsms,i,i) }
+
+# Check
+tmp <- c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 3, 2,
+		2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 3, 3, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2,
+		1, 1, 1, 1, 2, 3, 3, 2, 1, 1, 1, 1, 2, 2, 1, 1, 2, 1, 1, 1, 2, 3,
+		3, 2, 2, 3, 3, 3, 3, 2, 2, 3, 3, 3, 2, 3, 3, 3, 3, 3, 2, 2, 1, 1,
+		1, 1, 2, 2, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 2, 3, 3, 2, 2, 3, 2, 2,
+		2, 2, 3, 3, 3, 3, 2, 2, 2, 2, 3, 2, 3, 3, 3, 3, 2, 2, 3, 3, 3, 3,
+		3, 2, 2, 2, 2, 2, 1, 2, 1, 2, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 2, 2,
+		2, 2, 2, 2, 2, 1, 1, 1, 3, 2, 3, 2, 1, 1, 1, 2, 2, 3, 3, 2, 2, 2,
+		2, 3, 3, 3, 3, 2, 2, 1, 1, 2, 2, 3, 3, 3, 3, 2, 2, 1, 1, 1, 2, 3,
+		3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 3, 3,
+		2, 2, 1, 1, 1, 2, 2, 1, 2, 2, 2, 3, 2, 3, 2, 2, 1, 1, 2, 2, 2, 2,
+		2, 1, 1, 1, 1, 1, 2, 3, 3, 3, 2, 2, 3, 3, 3, 2, 2, 2, 3, 2, 3, 3,
+		3, 2, 2, 3, 1, 1, 1, 2, 2, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 2, 2, 1,
+		1, 1, 2, 2, 2, 3, 3, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 2, 2, 2, 1, 1,
+		2, 2, 1, 1)
+
+
+all.equal(sml_vec, as.character(tmp))
+
+# Have no idea what this was about...
+
+sampDesc_frm$sml <- paste0('G_', sml_vec)
+
+```
+
+
+## Get Intensity Data
+
+
+
+
+```{r m1a-get-intensity, eval=T, cache=T, cache.vars=c('expr_frm', 'genes_frm'),message=F, out.width.px=1, out.height.px=1}
+####,results='asis'}
+suppressPackageStartupMessages(require(edgeR))
+
+# get expr
+expr_frm <- Biobase::exprs(GSE.gset)
+
+# get genes_frm
+genes_frm <- GSE.gset@featureData@data
+
+entrezID <- GSE.gset@featureData@data[["ENTREZ_GENE_ID"]]
+entrezID <- gsub(" ///.*", "", entrezID)
+
+genes_symbol <- GSE.gset@featureData@data[["Gene.Symbol"]]
+genes_symbol <- gsub(" ///.*", "", genes_symbol)
+
+genes_frm <- data.frame(entrezID=entrezID, genes_symbol=genes_symbol, genes_frm)
+
+
+# remove duplicates
+duplicate_pos <- duplicated(entrezID)
+na_pos <- is.na(entrezID)
+
+expr_frm <- expr_frm[!(duplicate_pos | na_pos),] # remove genes in correpsonding postions
+genes_frm <- genes_frm[!(duplicate_pos | na_pos),] #
+
+rownames(genes_frm) <- genes_frm$entrezID
+rownames(expr_frm) <- genes_frm$entrezID
+
+ 
+```
+
+
+## Save as dgel object
+
+**Note** that the expression matrix stores log intensities from 
+an Affymetrix micro-array experement - these are not RNA-Seq read counts
+whihc is what the DGEList object was designed for.  We are only
+using these objects hare for convenience.
+
+
+```{r m1a-save, cache=T, cache.vars='',eval=T, out.width.px=1, out.height.px=1}
+
+GSE.dgel <- edgeR::DGEList(
+counts=expr_frm,
+samples=sampDesc_frm[colnames(expr_frm),],
+genes=genes_frm[rownames(expr_frm),])
+
+
+# save GSE.dgel
+saveObj(paste0(GSE_ID,'.dgel'), 'GSE.dgel')
+
+```
+
+
+# References
+<div id="refs"></div>
+
+
+# Session Info
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+ sessionInfo()
+```
+
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+  knit_exit()
+```
+
+
+####################################################################################
+## ARCHIVAL CODE 
+####################################################################################
+
+## END ARCHIVAL CODE 
+####################################################################################
+
+<!-- To run
+# nohup Rscript -e "knitr::knit2html('_M1A-read_GSE12139.Rmd')" > _M1A-read_GSE12139.log  &
+
+# Or
+# nohup Rscript -e "rmarkdown::render('_M1A-read_GSE12139.Rmd')" > _M1A-read_GSE12139.log  &
+
+
+-->
+
+

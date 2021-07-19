@@ -1,0 +1,116 @@
+PMID- 27801296
+OWN - NLM
+STAT- MEDLINE
+DCOM- 20170901
+LR  - 20181113
+IS  - 1471-2164 (Electronic)
+IS  - 1471-2164 (Linking)
+VI  - 17
+IP  - Suppl 8
+DP  - 2016 Oct 25
+TI  - Removal of unwanted variation reveals novel patterns of gene expression linked to 
+      sleep homeostasis in murine cortex.
+PG  - 727
+LID - 727
+AB  - BACKGROUND: Why we sleep is still one of the most perplexing mysteries in biology. 
+      Strong evidence indicates that sleep is necessary for normal brain function and that 
+      sleep need is a tightly regulated process. Surprisingly, molecular mechanisms that 
+      determine sleep need are incompletely described. Moreover, very little is known 
+      about transcriptional changes that specifically accompany the accumulation and 
+      discharge of sleep need. Several studies have characterized differential gene 
+      expression changes following sleep deprivation. Much less is known, however, about 
+      changes in gene expression during the compensatory response to sleep deprivation 
+      (i.e. recovery sleep). RESULTS: In this study we present a comprehensive analysis of 
+      the effects of sleep deprivation and subsequent recovery sleep on gene expression in 
+      the mouse cortex. We used a non-traditional analytical method for normalization of 
+      genome-wide gene expression data, Removal of Unwanted Variation (RUV). RUV improves 
+      detection of differential gene expression following sleep deprivation. We also show 
+      that RUV normalization is crucial to the discovery of differentially expressed genes 
+      associated with recovery sleep. Our analysis indicates that the majority of 
+      transcripts upregulated by sleep deprivation require 6 h of recovery sleep to return 
+      to baseline levels, while the majority of downregulated transcripts return to 
+      baseline levels within 1-3 h. We also find that transcripts that change rapidly 
+      during recovery (i.e. within 3 h) do so on average with a time constant that is 
+      similar to the time constant for the discharge of sleep need. CONCLUSIONS: We 
+      demonstrate that proper data normalization is essential to identify changes in gene 
+      expression that are specifically linked to sleep deprivation and recovery sleep. Our 
+      results provide the first evidence that recovery sleep is comprised of two waves of 
+      transcriptional regulation that occur at different times and affect functionally 
+      distinct classes of genes.
+FAU - Gerstner, Jason R
+AU  - Gerstner JR
+AD  - Washington State University, Elson S. Floyd College of Medicine, Spokane, WA, 99202, 
+      USA.
+FAU - Koberstein, John N
+AU  - Koberstein JN
+AD  - Washington State University, Elson S. Floyd College of Medicine, Spokane, WA, 99202, 
+      USA.
+FAU - Watson, Adam J
+AU  - Watson AJ
+AD  - Department of Neuroscience, Perelman School of Medicine University of Pennsylvania, 
+      Philadelphia, PA, 19104, USA.
+FAU - Zapero, Nikolai
+AU  - Zapero N
+AD  - Washington State University, Elson S. Floyd College of Medicine, Spokane, WA, 99202, 
+      USA.
+FAU - Risso, Davide
+AU  - Risso D
+AD  - Division of Biostatistics, School of Public Health, University of California, 
+      Berkeley, CA, 94720, USA.
+FAU - Speed, Terence P
+AU  - Speed TP
+AD  - Department of Statistics, University of California, Berkeley, CA, USA.
+AD  - Department of Mathematics and Statistics, The University of Melbourne, Melbourne, 
+      VIC, Australia.
+AD  - Bioinformatics Division, The Walter and Eliza Hall Institute of Medical Research, 
+      Parkville, VIC, Australia.
+FAU - Frank, Marcos G
+AU  - Frank MG
+AD  - Washington State University, Elson S. Floyd College of Medicine, Spokane, WA, 99202, 
+      USA. marcos.frank@wsu.edu.
+FAU - Peixoto, Lucia
+AU  - Peixoto L
+AD  - Washington State University, Elson S. Floyd College of Medicine, Spokane, WA, 99202, 
+      USA. lucia.peixoto@wsu.edu.
+LA  - eng
+GR  - R01 MH099544/MH/NIMH NIH HHS/United States
+PT  - Journal Article
+PT  - Research Support, N.I.H., Extramural
+PT  - Research Support, Non-U.S. Gov't
+DEP - 20161025
+TA  - BMC Genomics
+JT  - BMC genomics
+JID - 100965258
+SB  - IM
+MH  - Animals
+MH  - Cerebral Cortex/*physiology
+MH  - Circadian Rhythm/genetics
+MH  - Cluster Analysis
+MH  - Gene Expression Profiling
+MH  - *Gene Expression Regulation
+MH  - Homeostasis/*genetics
+MH  - Male
+MH  - Mice
+MH  - Sleep/*genetics
+MH  - Sleep Deprivation/genetics
+MH  - *Transcriptome
+PMC - PMC5088519
+OTO - NOTNLM
+OT  - *Circadian
+OT  - *Gene
+OT  - *Microarray
+OT  - *Sleep
+OT  - *Sleep deprivation
+OT  - *Transcriptomics
+OT  - *mRNA
+EDAT- 2016/11/02 06:00
+MHDA- 2017/09/02 06:00
+CRDT- 2016/11/02 06:00
+PHST- 2016/11/02 06:00 [pubmed]
+PHST- 2017/09/02 06:00 [medline]
+PHST- 2016/11/02 06:00 [entrez]
+AID - 10.1186/s12864-016-3065-8 [pii]
+AID - 3065 [pii]
+AID - 10.1186/s12864-016-3065-8 [doi]
+PST - epublish
+SO  - BMC Genomics. 2016 Oct 25;17(Suppl 8):727. doi: 10.1186/s12864-016-3065-8.

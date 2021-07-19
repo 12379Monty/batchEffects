@@ -1,0 +1,79 @@
+PMID- 25150836
+OWN - NLM
+STAT- MEDLINE
+DCOM- 20151029
+LR  - 20181113
+IS  - 1546-1696 (Electronic)
+IS  - 1087-0156 (Print)
+IS  - 1087-0156 (Linking)
+VI  - 32
+IP  - 9
+DP  - 2014 Sep
+TI  - Normalization of RNA-seq data using factor analysis of control genes or samples.
+PG  - 896-902
+LID - 10.1038/nbt.2931 [doi]
+AB  - Normalization of RNA-sequencing (RNA-seq) data has proven essential to ensure 
+      accurate inference of expression levels. Here, we show that usual normalization 
+      approaches mostly account for sequencing depth and fail to correct for library 
+      preparation and other more complex unwanted technical effects. We evaluate the 
+      performance of the External RNA Control Consortium (ERCC) spike-in controls and 
+      investigate the possibility of using them directly for normalization. We show that 
+      the spike-ins are not reliable enough to be used in standard global-scaling or 
+      regression-based normalization procedures. We propose a normalization strategy, 
+      called remove unwanted variation (RUV), that adjusts for nuisance technical effects 
+      by performing factor analysis on suitable sets of control genes (e.g., ERCC 
+      spike-ins) or samples (e.g., replicate libraries). Our approach leads to more 
+      accurate estimates of expression fold-changes and tests of differential expression 
+      compared to state-of-the-art normalization methods. In particular, RUV promises to 
+      be valuable for large collaborative projects involving multiple laboratories, 
+      technicians, and/or sequencing platforms.
+FAU - Risso, Davide
+AU  - Risso D
+AUID- ORCID: 0000000185085012
+AD  - Department of Statistics, University of California, Berkeley, Berkeley, California, 
+      USA.
+FAU - Ngai, John
+AU  - Ngai J
+AD  - 1] Department of Molecular and Cell Biology, University of California, Berkeley, 
+      Berkeley, California, USA. [2] Helen Wills Neuroscience Institute, University of 
+      California, Berkeley, Berkeley, California, USA. [3] Functional Genomics Laboratory, 
+      University of California, Berkeley, Berkeley, California, USA.
+FAU - Speed, Terence P
+AU  - Speed TP
+AD  - 1] Department of Statistics, University of California, Berkeley, Berkeley, 
+      California, USA. [2] Bioinformatics Division, The Walter and Eliza Hall Institute of 
+      Medical Research, Parkville, Victoria, Australia. [3] Department of Mathematics and 
+      Statistics, The University of Melbourne, Victoria, Australia.
+FAU - Dudoit, Sandrine
+AU  - Dudoit S
+AD  - 1] Department of Statistics, University of California, Berkeley, Berkeley, 
+      California, USA. [2] Division of Biostatistics, University of California, Berkeley, 
+      Berkeley, California, USA.
+LA  - eng
+SI  - GEO/GSE47792
+SI  - GEO/GSE53334
+GR  - R01 DC007235/DC/NIDCD NIH HHS/United States
+PT  - Journal Article
+PT  - Research Support, Non-U.S. Gov't
+DEP - 20140824
+TA  - Nat Biotechnol
+JT  - Nature biotechnology
+JID - 9604648
+SB  - IM
+MH  - Action Potentials
+MH  - *Factor Analysis, Statistical
+MH  - *Sequence Analysis, RNA
+PMC - PMC4404308
+MID - NIHMS679466
+EDAT- 2014/08/26 06:00
+MHDA- 2015/10/30 06:00
+CRDT- 2014/08/25 06:00
+PHST- 2013/11/27 00:00 [received]
+PHST- 2014/05/14 00:00 [accepted]
+PHST- 2014/08/25 06:00 [entrez]
+PHST- 2014/08/26 06:00 [pubmed]
+PHST- 2015/10/30 06:00 [medline]
+AID - nbt.2931 [pii]
+AID - 10.1038/nbt.2931 [doi]
+PST - ppublish
+SO  - Nat Biotechnol. 2014 Sep;32(9):896-902. doi: 10.1038/nbt.2931. Epub 2014 Aug 24.

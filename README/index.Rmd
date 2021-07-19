@@ -1,0 +1,57 @@
+---
+title: Microbiome analyses of blood and tissues
+output: github_document
+bibliography: ../_bib/microBiome.bib
+csl: ../_csl/cell-numeric.csl
+link-citations: true
+---
+
+<!-- index.md is generated from index.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/index-",
+  out.width = "100%"
+)
+```
+
+## Microbiome analyses of blood and tissues
+
+This repo contains a scripts which run some analyses on some
+of the data reported in Poore et al. (2020) [@Poore:2020aa]
+(https://www.nature.com/articles/s41586-020-2095-1)
+Some data are available from the publisher's web site,
+as well as at  ftp://ftp.microbio.me/pub/cancer_microbiome_analysis/.
+Programming scripts can be found in a github repo -
+ https://github.com/biocore/tcga.
+
+
+## `r emo::ji("construction")` 
+
+
+<br/>
+
+
+<!-- DOESNT WORK WITH GITHUB
+## References
+<div id="refs"></div>
+-->
+
+-----
+
+<!--
+
+Please note that the 'GSE112679' project is released with a [Contributor Code of Conduct](.github/CODE_OF_CONDUCT.md). By contributing to this project, you agree to abide by its terms.
+
+
+Rscript -e "rmarkdown::render('index.Rmd')"
+
+# nohup Rscript -e "rmarkdown::render('index.Rmd', rmarkdown::md_document())" > index.log  &
+# nohup Rscript -e "rmarkdown::render('index.Rmd')" > index.log  &
+
+### REMEMBER TO `cp index.md ../README.md`
+
+
+-->

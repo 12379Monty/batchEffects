@@ -1,0 +1,872 @@
+---
+title: "Early Detection of Hepatocellular Carcinoma: Examine 5hmC Sequencing Data - TUTI Set"
+author: ""
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  BiocStyle::html_document:
+    code_folding: hide
+    toc: true
+    # does this have an effect
+    fig_caption: yes
+    # this has no effect
+    number_sections: yes
+    css: ../../../_pandocFiles/pandoc3.css
+#bibliography: ../../../_bibFiles/5hmc.bib
+bibliography: ../../../_bibFiles/bibFile.bib
+#csl: ../../../_bibFiles/acm-sig-proceedings.csl  - doest work with pandoc-siteproc
+csl: ../../../_bibFiles/cell-numeric.csl
+#biblio-style: acm
+link-citations: true
+vignette: >
+ %\VignetteEncoding{UTF-8}
+ %\VignetteEngine{knitr::rmarkdown}
+---
+
+`r STUDY <- 'Early Detection of Hepatocellular Carcinoma'`
+
+```{r GlobalOptions, results="hide", include=FALSE, cache=FALSE}
+knitr::opts_knit$set(stop_on_error = 2L) #really make it stop
+knitr::opts_knit$set(comment='')
+#knitr::dep_auto()
+```
+<!-- ######################################################################## -->
+
+```{r Mymva, echo=F}
+ source('Mymva.r')
+```
+
+```{r Prelims, include=FALSE, echo=T, results='hide', message=FALSE,cache=F}
+
+ FN <- "_M2A-lookHCCdataTUTI"
+if(sum(grepl(FN, list.files()))==0) stop("Check FN")
+
+ PREFIX <- "M2A-"
+
+ suppressPackageStartupMessages(require(limma))
+ suppressPackageStartupMessages(require(edgeR))
+ suppressPackageStartupMessages(require(DESeq2))
+ 
+ suppressPackageStartupMessages(require(methods))
+ suppressPackageStartupMessages(require(rmarkdown))
+ suppressPackageStartupMessages(require(bookdown))
+
+ suppressPackageStartupMessages(require(knitr))
+ options(stringsAsFactors=F)
+
+ suppressPackageStartupMessages(require(data.table)) 
+ options(datatable.fread.datatable=F)
+
+ suppressPackageStartupMessages(require(plyr))
+ suppressPackageStartupMessages(require(dplyr))
+ suppressPackageStartupMessages(require(magrittr))
+
+ # Shotcuts for knitting and redering while in R session (Invoke interactive R from R/Scripts folder)
+ kk <- function(n='') knitr::knit2html(paste("t", n, sep=''), envir=globalenv(),
+       output=paste(FN,".html", sep=''))
+
+ rr <- function(n='') rmarkdown::render(paste("t", n, sep=''), envir=globalenv(),
+       output_file=paste(FN,".html", sep='')) ##, output_dir='Scripts')
+
+ bb <- function(n='') browseURL(paste(FN,".html", sep=''))
+
+ # The usual shotcuts
+ zz <- function(n='') source(paste("t", n, sep=''))
+
+ # Using relative paths:
+ # Script will be invoked from R/Scripts folder.  Make 'R' the WRKDIR.
+ WRKDIR <- ('..')
+
+ # Not needed if path is relative ...
+ if(!file.exists(WRKDIR)) stop("WRKDIR ERROR: ", WRKDIR)
+
+ # do once
+ #setwd(WRKDIR)
+
+ # file rmarkdown file management options: cache, figures
+ cache_DIR <- file.path(WRKDIR, 'Scripts', 'cache/M2A/')
+ suppressPackageStartupMessages(dir.create(cache_DIR, recursive=T))
+ opts_chunk$set(cache.path=cache_DIR)
+
+ # NOTE: need to add PREFIX to figure path 
+ # due to confluence "feature" of keeping the filename of embedded figures
+ figure_DIR <- file.path(WRKDIR, 'Scripts', 'figure/M2A/')
+ suppressPackageStartupMessages(dir.create(figure_DIR, recursive=T))
+ opts_chunk$set(fig.path=paste0(figure_DIR, PREFIX))
+
+ table_DIR <- file.path(WRKDIR, 'Scripts', 'table/M2A/')
+ suppressPackageStartupMessages(dir.create(table_DIR, recursive=T))
+ 
+ # need a local copy of help_DIR
+ #help_DIR <- file.path(WRKDIR, 'help_files')
+ help_DIR <- file.path('.', 'help_files')
+ suppressPackageStartupMessages(dir.create(help_DIR, recursive=T))
+ 
+ temp_DIR <- file.path(WRKDIR, 'temp_files')
+ suppressPackageStartupMessages(dir.create(temp_DIR, recursive=T))
+
+ # *NEW* WEB Server path
+ WEB_ROOT <- "https://us-east-serverlesswebsite-monty12379.s3.amazonaws.com/Projects"
+ PROJ_DIR <- rev(unlist(strsplit(getwd(), split='/')))[3]
+ WEB_SERVER_FIG_DIR <- paste(WEB_ROOT, PROJ_DIR,"R/Scripts/figure", sub('-$','', PREFIX), sep='/')
+ WEB_SERVER_TBL_DIR <- paste(WEB_ROOT, PROJ_DIR,"R/Scripts/table", sub('-$','', PREFIX), sep='/')
+
+```
+<!-- ######################################################################## -->
+
+
+```{r utilityFns, echo=FALSE}
+ source('utilityFns.r')
+
+ ##########################################
+ # Changed 2019.03.22 - just compute ncol from Nrow...
+ twoRowLegend <- function(Legend.vec, Loc='top', Nrow=2, Tlen=NA,...) {
+  # draws horizontal legend in 1 or 2 rows
+
+  if(Nrow==2) if(length(Legend.vec) %% 2) Legend.vec <- c(Legend.vec,NA)
+
+  legend_order <- matrix(1:length(Legend.vec), nrow=Nrow, byrow=F)
+
+  if(is.na(Tlen)) Tlen = max(nchar(names(Legend.vec)))
+
+  legend(Loc, horiz=F, lty=1, bty='n', lwd=2,
+         legend=substring(names(Legend.vec), 1, Tlen), ###[legend_order],
+         col=Legend.vec, ###[legend_order],
+     ncol=ceiling(length(Legend.vec) / Nrow), ... ) ###ncol(legend_order),...)
+ }
+
+
+```
+<!-- ######################################################################## -->
+
+
+*** 
+
+
+# Set Analysis Parameters
+
+```{r setAnalysisParameters, echo=T, cache=F}
+
+ GSE_ID <- 'GSE112679'
+ DD <- 'CaiHCC'
+
+ SET <- "TUTI"
+
+ EXCL_SAMPLES <- NULL
+
+ # EXCLUDE SEQUENCING FAILURES
+ # DEFINED BOVE
+
+```
+
+
+# Abstract
+
+In [_M1A-readHCCdata.html](./_M1A-readHCCdata.html)
+we read in data downloaded from
+[NCBI/Gene Expression Omnibus Database (GSE112679)](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE112679).
+Findings from analysis of these data are reported in
+Cai et al. (2019) [@Cai:2019aa]).
+Due to the size of the dataset, we stored the sequencing results in 4 different 
+sets - TUTI, Train, Val_1 and Val_2.  TUTI are tissue samples and the rest are plasma.
+
+In this script we will examine the `r SET` set.
+
+
+<!-- OUTLINE
+# Load Data
+## Annotation 
+# coverage
+## Raw
+## RLE
+# Similarity Analysis
+## hclust
+## PCA/MDPlot
+## tsne
+## scatterD3
+-->
+
+# Load Data 
+
+```{r loadData, echo=T, cache=T, cache.vars=c('DD.Set.dgel')}
+  loadObj(paste0(DD, '.', SET, ".dgel"), "DD.Set.dgel")
+
+  dim(DD.Set.dgel)
+
+
+ with(DD.Set.dgel$samples, table(Dx, TrainValGroup, exclude=NULL))
+
+ with(DD.Set.dgel$samples, table(Tissue, TrainValGroup, exclude=NULL))
+
+ with(DD.Set.dgel$samples, table(SampType, TissueSubtpe, exclude=NULL))
+
+ with(DD.Set.dgel$samples, table(SampType, Stage, exclude=NULL))
+
+
+```
+
+
+## Annotation 
+
+
+```{r annotation}
+ # kelly's colors - https://i.kinja-img.com/gawker-media/image/upload/1015680494325093012.JPG
+ # https://gist.github.com/ollieglass/f6ddd781eeae1d24e391265432297538
+ KellyColors.vec <- c('#F3C300', '#875692', '#F38400', '#A1CAF1',
+                      '#BE0032', '#C2B280', '#848482', '#008856', '#E68FAC', '#0067A5',
+                      '#F99379', '#604E97', '#F6A600', '#B3446C', '#DCD300', '#882D17',
+                      '#F2F3F4', '#222222',  ### shifted down from pos 1:2
+                      '#8DB600', '#654522', '#E25822', '#2B3D26')
+
+ # Annotation
+ ########################################
+ # Option 1
+ suppressPackageStartupMessages(require(RColorBrewer))
+ qual_col_pals <- brewer.pal.info[brewer.pal.info$category == 'qual',]
+ col_vector <- unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+ col_vector[4] <- 'black'
+
+ # Option 2
+ #col_vector <- KellyColors.vec
+
+
+ # TrainValGroup
+ TrainValGroupLegend.vec <- sort(unique(DD.Set.dgel$samples$TrainValGroup))
+ TrainValGroupCol.vec <- col_vector[1:length(TrainValGroupLegend.vec)]
+ names(TrainValGroupCol.vec) <- TrainValGroupLegend.vec
+
+ TrainValGroupPch.vec <- 1:length(TrainValGroupLegend.vec)
+ names(TrainValGroupPch.vec) <- TrainValGroupLegend.vec
+
+ # Dx
+ DxLegend.vec <- sort(unique(DD.Set.dgel$samples$Dx))
+ DxCol.vec <- col_vector[1:length(DxLegend.vec)]
+ names(DxCol.vec) <- DxLegend.vec
+
+ DxPch.vec <- 1:length(DxLegend.vec)
+ names(DxPch.vec) <- DxLegend.vec
+
+ # SampType
+ SampTypeLegend.vec <- sort(unique(DD.Set.dgel$samples$SampType))
+ SampTypeCol.vec <- col_vector[1:length(SampTypeLegend.vec)]
+ names(SampTypeCol.vec) <- SampTypeLegend.vec
+
+ SampTypePch.vec <- 1:length(SampTypeLegend.vec)
+ names(SampTypePch.vec) <- SampTypeLegend.vec
+
+ # Stage
+
+```
+
+# coverage
+
+## Raw
+
+```{r boxplotCovrge, echo=T, cache=T, fig.height=8, fig.width=11}
+
+ # Plot by SampType
+ par(mfrow=c(2,1), mar=c(5,3,2,0),oma=c(0,0,2,0))
+
+ for(SampType in unique(DD.Set.dgel$samples$SampType)){
+ 
+  ST.ndx <- which(DD.Set.dgel$samples$SampType==SampType)
+ 
+  boxplot(log2(DD.Set.dgel$counts[,ST.ndx]+1),
+         ylim=c(4,12)-2,###ylim=range(log2(DD.Set.dgel$counts+1))+c(0,1),
+         staplewex = 0,       # remove horizontal whisker lines
+         staplecol = "white", # just to be totally sure :)
+         outline = F,         # remove outlying points
+         whisklty = 0,        # remove vertical whisker lines
+         las=2, horizontal=F,  xaxt='n',
+         border=DxCol.vec[DD.Set.dgel$samples[ST.ndx,'Dx']])
+
+  tmp <- DxCol.vec[sort(unique(DD.Set.dgel$samples[ST.ndx,'Dx']))]
+  #names(tmp) <- substring(names(tmp), 1, 3)
+  twoRowLegend(tmp, Nrow=2, seg.len=0.5)
+
+  axis(side=1, at=1:ncol(DD.Set.dgel$counts[,ST.ndx]),las=2, DD.Set.dgel$samples[ST.ndx,'Title'])
+
+  SampleMedian.vec <- apply(log2(DD.Set.dgel$counts[,ST.ndx]+1),2,median)
+  abline(h=median(SampleMedian.vec), col='grey')
+  axis(side=2, at=round(median(SampleMedian.vec),1),las=2, col='grey', line=-1,tick=F)
+  title(SampType)
+
+ }
+
+ mtext(side=3, outer=T, cex=1.25, paste(SET, '- Raw Coverage'))
+
+```
+
+
+## RLR
+
+In the first instance, we look at sample profile similarities by means of the 
+RLR distribution spread.  In this case, we do not filter away weakly expressed 
+features nor do we account for sex.  We will apply TMM normalization to remove
+seqeuncing depth artifacts.
+
+Of interest is the difference between TU and TI samples,
+so we will consider the effect of this factor.
+
+```{r TTMnorm, cache=T, cache.vars='DD.Set.dgel'}
+
+  DD.Set.dgel <- calcNormFactors(DD.Set.dgel)
+
+  # Save in SampType order
+  DD.Set.dgel <- DD.Set.dgel[, with(DD.Set.dgel$samples, order(SampType, as.numeric(SampNo)))]
+
+  #DT::datatable(DD.Set.dgel$samples)
+
+```
+
+```{r boxplotRLR, echo=T, cache=T, cache.vars='', fig.height=10, fig.width=11}
+
+  DD.Set.lcpm.mtx <- cpm(DD.Set.dgel, log=T)
+
+  par(mfrow=c(3,1), mar=c(2,3,2,2),oma=c(2,0,2,0))
+
+  # Global RLR
+  median.vec <- apply(DD.Set.lcpm.mtx, 1, median)
+  RLR.mtx <- sweep(DD.Set.lcpm.mtx,1,median.vec)
+
+  boxplot(RLR.mtx, xlab='', ylim=c(-.6, .6),
+          staplewex = 0,       # remove horizontal whisker lines
+          staplecol = "white", # just to be totally sure :)
+          outline = F,         # remove outlying points
+          whisklty = 0,        # remove vertical whisker lines
+          las=2, horizontal=F,
+          border=SampTypeCol.vec[DD.Set.dgel$samples$SampType],xaxt='n')
+  tmp <- SampTypeCol.vec[sort(unique(DD.Set.dgel$samples$SampType))]
+  #names(tmp) <- substring(names(tmp), 1, 3)
+  twoRowLegend(tmp, Nrow=1, seg.len=0.5)
+  title('RLR wrt to Dataset Median')
+
+  # Add SampType Q1, Q3
+ for(ST in unique(DD.Set.dgel$samples$SampType)){
+  SampType.ndx <- which(DD.Set.dgel$samples$SampType == ST)
+  SampType.Q1Q3.mtx <- apply(RLR.mtx[, SampType.ndx],2,quantile, prob=c(.25,.75))
+  abline(h=apply(SampType.Q1Q3.mtx, 1, median), col=SampTypeCol.vec[ST])
+  #axis(side=4, at=round(apply(SampType.Q1Q3.mtx, 1, median),2),las=2,
+       #col=source_shinyCol.vec['SampType'], line=-3,tick=F)
+ }
+
+ # RLR wrt SampType
+ for(SampType in unique(DD.Set.dgel$samples$SampType)){
+
+  ST.ndx <- which(DD.Set.dgel$samples$SampType==SampType)
+  
+  median.vec <- apply(DD.Set.lcpm.mtx[,ST.ndx], 1, median)
+  RLR.mtx <- sweep(DD.Set.lcpm.mtx,1,median.vec)
+
+  boxplot(RLR.mtx, xlab='', ylim=c(-.6, .6),
+          staplewex = 0,       # remove horizontal whisker lines
+          staplecol = "white", # just to be totally sure :)
+          outline = F,         # remove outlying points
+          whisklty = 0,        # remove vertical whisker lines
+          las=2, horizontal=F,
+          border=SampTypeCol.vec[DD.Set.dgel$samples$SampType],xaxt='n')
+  tmp <- SampTypeCol.vec[sort(unique(DD.Set.dgel$samples$SampType))]
+  #names(tmp) <- substring(names(tmp), 1, 3)
+  twoRowLegend(tmp, Nrow=1, seg.len=0.5)
+  title(paste('RLR wrt to ', SampType,'Median'))
+
+  # Add SampType Q1, Q3
+  for(ST in unique(DD.Set.dgel$samples$SampType)){
+   SampType.ndx <- which(DD.Set.dgel$samples$SampType == ST)
+   SampType.Q1Q3.mtx <- apply(RLR.mtx[, SampType.ndx],2,quantile, prob=c(.25,.75))
+   abline(h=apply(SampType.Q1Q3.mtx, 1, median), col=SampTypeCol.vec[ST])
+   #axis(side=4, at=round(apply(SampType.Q1Q3.mtx, 1, median),2),las=2,
+        #col=source_shinyCol.vec['SampType'], line=-3,tick=F)
+  }
+
+ }#for(SampType 
+
+ axis(side=1, at=1:ncol(RLR.mtx), las=2, DD.Set.dgel$samples[colnames(RLR.mtx),"Title"])
+ mtext(side=3, outer=T, cex=1.25, paste(SET, '- RLR wrt Various Reference Sets'))
+
+```
+
+
+# Similarity Analysis
+
+
+## Hierarchical Clustering View of IQR Log Ratios
+
+`r CLUSTMETH <- 'complete'; cat('**Clustering with complere linkage**')`
+```{r hclust5hmClcpm, fig.height=6, fig.width=11,fig.cap="Hierarchical Clustering Plot of IQR lcpm Ratios -  All Represented Genes",cache=T,cache.vars=c(''),eval=T, echo=T}
+ 
+ ## function to set label color
+ labelCol <- function(x, labCol=NULL) {
+  if (is.leaf(x)) {
+    ## fetch label
+    label <- attr(x, "label")
+    ## set label color to red for A and B, to blue otherwise
+    if(!is.null(labCol)) attr(x, "nodePar") <- list(lab.col=labCol[label], lab.cex=0.7)
+                                      #ifelse(label %in% c("A", "B"), "red", "blue"))
+   }
+   return(x) }
+
+  DD.Set.lcpm.mtx <- cpm(DD.Set.dgel, log=T)
+
+ # Get Color vector prior to renaming columns
+ DD.Set.SampTypeCol.vec <- SampTypeCol.vec[DD.Set.dgel$samples$SampType]
+
+ DD.Set.SampType.vec <-  DD.Set.dgel$samples[,"SampType"]
+ DD.Set.Title.vec <- DD.Set.dgel$samples[, "Title"]
+
+ colnames(DD.Set.lcpm.mtx) <- DD.Set.Title.vec
+ # Flag Low Covrge
+ DD.Set.Coverage.vec <- colSums(DD.Set.dgel$counts)/1e6
+ colnames(DD.Set.lcpm.mtx) <- ifelse(DD.Set.Coverage.vec > 4,
+ colnames(DD.Set.lcpm.mtx), paste0('L_', colnames(DD.Set.lcpm.mtx)))
+
+ names(DD.Set.SampTypeCol.vec) <- colnames(DD.Set.lcpm.mtx)
+
+ # Get corr/dist/hclust
+ DD.Set.lcpm.dist <- proxy::dist(DD.Set.lcpm.mtx, by_rows=F, 
+  method=function(x,y) IQR(x-y, na.rm=T)) ### DO NOT log2 lcpm!!! IQR(log2(x)-log2(y),na.rm=T))
+ DD.Set.lcpm.hclust <- hclust(DD.Set.lcpm.dist, method=CLUSTMETH)
+
+ DD.Set.lcpm.hclust <- 
+ dendrapply(as.dendrogram(DD.Set.lcpm.hclust), labelCol, labCol=DD.Set.SampTypeCol.vec)
+
+ # Plot
+ #par(oma=c(5,0,0,0), xpd=F)
+ par(mar=par('mar')+c(2,0,0,0))
+ plot(DD.Set.lcpm.hclust, ylab='IQR lcpm diff', xlab='',sub='',ylim=c(0,1.1),
+      main=paste("IQR 5hmC Sample lcpm Diff Based on Represented Genes\nmethod=",CLUSTMETH))
+    #### \nred=plate  blue=tube")
+ 
+ Legend <- unique(DD.Set.SampType.vec)
+ legend('topright', legend=Legend, col=SampTypeCol.vec[unique(DD.Set.SampType.vec)],
+        pch=20, horiz=F, cex=0.8, ncol=4)
+
+
+```
+
+* Samples cluster densely by tissue type - tumor is different!  
+* Within tissue type simlarity structures are not conserved scross tissue types - TI_{2,12,10,14} have similar
+tissue profiles, but TU_{2,12,10,14} are not similar. 
+
+We are assuming here that TI_1 is matched with TU_1, etc.  It is unclear as to how tissue samples are to be
+examined to derive information that woul dbe useful for the analysis of the plasma samples. 
+
+* At the individual subject level one cannot confidently isolate a few features that are different between TU and TI.   
+* At the cohort level, it is unclear as to how TU vs TI differences are reflected in plasma.  
+* In the end, TU-TI-Plasma appear as coming from three different sources on DNA. 
+
+
+
+
+# Clustering by leading FC genes
+
+
+
+###  Remove genes that are lowly expressed  
+
+
+```{r zeroGenes, cache=T, cache.vars=''}
+
+ table(rowSums(DD.Set.dgel$counts>0)==0)
+
+```
+
+Genes that are not expressed at a biologically meaningful level in any condition should be discarded to reduce the subset of genes to those that are of interest, and to reduce the number of tests carried out downstream when looking at differential expression. Upon examination of log-CPM values, it can be seen that a large proportion of genes within each sample is unexpressed or lowly-expressed.
+
+
+```{r densityRawCpm, cache=T, cache.vars='', fig.height=6,fig.width=11, fig.cap="log-cpm histograms - Raw data", echo=T}
+
+ plot(density(DD.Set.lcpm.mtx[,1]),
+      col=SampTypeCol.vec[DD.Set.dgel$samples$SampType[1]],
+      #lty=ifelse(is.element(DD.Set.dgel$samples$SeqID[1], EXCL_SAMPLES),2,1),
+      lwd=2,ylim=c(0,.25), las=2, main='', xlab='')
+ abline(v=0, col=3)
+ for (JJ in 2:ncol(DD.Set.lcpm.mtx)){
+  den <- density(DD.Set.lcpm.mtx[,JJ])
+  lines(den$x, den$y, col=SampTypeCol.vec[DD.Set.dgel$samples$SampType[JJ]], lwd=2)
+      #lty=ifelse(is.element(DD.Set.dgel$samples$SeqID[JJ], EXCL_SAMPLES),2,1))
+ }#for(JJ
+
+ title(paste(SET, '- unfiltered lcpm Densities'))
+
+ Legend <- unique(DD.Set.dgel$samples$SampType)
+ legend('topright', legend=Legend, col=SampTypeCol.vec[Legend],
+        lty=1, lwd=2, horiz=F, cex=0.8)
+
+```
+
+
+
+```{r libSizeSum, cache=T, cache.vars='LibSizeSum', echo=T}
+ LibSizeSum <- summary( DD.Set.dgel$samples$lib.size / 1e6 )
+```
+
+
+It can be seen that a significant proportion of genes within each sample is unexpressed or lowly-expressed.
+Although any sensible value can be used as the expression level cutoff, typically a CPM value of 1 is
+used in our analyses as it separates expressed genes from unexpressed genes well for most 
+RNA-Seq datasets ([Law et al., 2016](https://master.bioconductor.org/packages/release/workflows/html/RNAseq123.html)).
+Here, a CPM value of 3 means that a gene is expressed if it has at least 
+`r 3*ceiling(min(LibSizeSum))`  in the sample with the
+lowest sequencing depth (library size `r round(min(LibSizeSum),1)`  million) or at least 
+`r 3*ceiling(max(LibSizeSum))` counts in the sample with the
+greatest sequencing depth (library size `r round(max(LibSizeSum),1)` million).
+
+Using a nominal CPM value of 3 genes are deeemd to be expressed if their expression
+is above this threshold, and unexpressed otherwise. Genes must be expressed in at least
+5 (arbitrarty number) samples across the entire experiment to be kept for downstream analysis.
+
+```{r lowExprFilter, cache=T, cach.vars=c('DD.Set.dgel', 'DD.Set.cpm.mtx', 'DD.Set.lcpm.mtx'), echo=T}
+
+ DD.Set.cpm.mtx <- cpm(DD.Set.dgel)
+
+ Weak.flg <- rowSums(DD.Set.cpm.mtx>3) < 5
+ mean(Weak.flg)
+ DD.Set.dgel <- DD.Set.dgel[!Weak.flg,, keep.lib.sizes=FALSE]
+ rm(Weak.flg)
+
+ DD.Set.cpm.mtx <- cpm(DD.Set.dgel)
+ DD.Set.lcpm.mtx <- cpm(DD.Set.dgel, log=T)
+
+```
+
+```{r densityFilteredCpm, cache=T, cache.vars='', fig.height=6,fig.width=11, fig.cap="log-cpm histograms - Filtered data", echo=T}
+
+ plot(density(DD.Set.lcpm.mtx[,1]),
+      col=SampTypeCol.vec[DD.Set.dgel$samples$SampType[1]],
+      #lty=ifelse(is.element(DD.Set.dgel$samples$SeqID[1], EXCL_SAMPLES),2,1),
+      lwd=2,ylim=c(0,.25), las=2, main='', xlab='')
+ abline(v=0, col=3)
+ for (JJ in 2:ncol(DD.Set.lcpm.mtx)){
+  den <- density(DD.Set.lcpm.mtx[,JJ])
+  lines(den$x, den$y, col=SampTypeCol.vec[DD.Set.dgel$samples$SampType[JJ]], lwd=2)
+      #lty=ifelse(is.element(DD.Set.dgel$samples$SeqID[JJ], EXCL_SAMPLES),2,1))
+ }#for(JJ
+
+ title(paste(SET, '- filtered lcpm Densities'))
+
+ Legend <- unique(DD.Set.dgel$samples$SampType)
+ legend('topright', legend=Legend, col=SampTypeCol.vec[Legend],
+        lty=1, lwd=2, horiz=F, cex=0.8)
+
+```
+
+
+### Normalize gene expression distributions 
+
+
+```{r normalize, cache=T, cache.vars=c('DD.Set.dgel', 'DD.Set.cpm.mtx', 'DD.Set.lcpm.mtx'), echo=T}
+
+ DD.Set.dgel <- calcNormFactors(DD.Set.dgel, method='TMM')
+
+ #kable(DD.Set.dgel$samples)
+
+ #summary(DD.Set.lcpm.mtx[,1:4])
+
+ DD.Set.cpm.mtx <- cpm(DD.Set.dgel)
+ DD.Set.lcpm.mtx <- cpm(DD.Set.dgel, log=T)
+
+ #summary(DD.Set.lcpm.mtx[,1:4])
+
+```
+
+
+###  Unsupervised clustering of samples  
+
+
+
+```{r plotMDSAll, cache=T, cache.vars='', fig.height=6, fig.width=11,fig.cap="MDS plots of log-CPM values"}
+ # NOTE - changes made to objects here are not saved.
+
+ # par; rows=annotation, cols=dimensions
+ par(mfcol=c(1,2), mar=c(4,4,2,1), xpd=NA, oma=c(0,0,2,0))
+
+ SeqID.vec <- colnames(DD.Set.lcpm.mtx)
+
+ totalCount.vec <- colSums(DD.Set.dgel$counts)/1e6
+
+ SampleID.vec <- DD.Set.dgel$samples[SeqID.vec,"Title"]
+ SampleID.vec <- ifelse(totalCount.vec > 4, SampleID.vec,
+                        paste0('L_', SampleID.vec))
+
+ TrainValGroup.vec <- DD.Set.dgel$samples[SeqID.vec,"TrainValGroup"]
+
+NO_SEX <- function() {
+ Sex.vec <- DD.Set.dgel$samples[SeqID.vec,"Sex"]
+ Sex.vec <- ifelse(is.na(Sex.vec), 'UNKNOWN',Sex.vec)
+
+ SexSet.vec <- unique(Sex.vec)
+ 
+ Sex.col <- as.numeric(as.factor(SexSet.vec))
+ names(Sex.col) <- SexSet.vec
+}#NO_SEX
+
+ # Dim 1, 2
+ MDS.out <- plotMDS(DD.Set.lcpm.mtx, labels=SampleID.vec, col=TrainValGroupCol.vec[TrainValGroup.vec]) #### col=Sex.col[Sex.vec])
+ twoRowLegend(TrainValGroupCol.vec,Loc='bottomleft',Nrow=2, cex=0.7)
+ #twoRowLegend(Sex.col,Nrow=2, cex=0.7)
+
+ # Dim 3, 4
+ plotMDS(DD.Set.lcpm.mtx, labels=SampleID.vec, col=TrainValGroupCol.vec[TrainValGroup.vec], dim.plot=3:4)
+ #title("All Represented Genes - dim 3,4")
+
+ mtext(side=3, outer=T, cex=1.5, 
+   paste(DD, "- Clustering on represented genes and all samples"))
+
+```
+
+<!--
+Repeat, excluding samples -  DNA
+-->
+
+
+### Get interactive MDS Plots - glMDSPlot
+
+
+```{r glMDSPlotHelp, echo=FALSE, cache=TRUE, cache.vars='Glimma.glMDSPlot.path'}
+ # CHANGE TO CLEAR CACHE
+ Glimma.glMDSPlot.path <- file.path(help_DIR, 'Glimma.glMDSPlot.html')
+ static_help("Glimma", "glMDSPlot", out=Glimma.glMDSPlot.path)
+```
+
+<!--
+[glMDSPlot](`r Glimma.glMDSPlot.path`) from package `Glimma` provides an interactive MDS 
+plot that can extremely usful for exploration,
+-->
+
+```{r GlMDSplot, echo=T,cache=T, cache.vars='', fig.height=6, fig.width=11,fig.cap="MDS plots of log-CPM values - Excluding outliers"}
+ # NOTE - changes made to objects here are not saved.
+
+ suppressPackageStartupMessages(require(Glimma))
+
+
+ DD.dgel <- DD.Set.dgel
+
+SKIP_EXCL <- function() {
+ EXCL.ndx <- which(is.element(colnames(DD.dgel), EXCL_SAMPLES))
+ if(length(EXCL.ndx)) {
+  #cat("excluding:\n ", paste(DD.dgel$samples$SampleID[EXCL.ndx],collapse=','), '\n')
+  DD.dgel <- DD.dgel[, -EXCL.ndx]
+  rm(EXCL.ndx)
+ }
+}
+
+
+ totalCount.vec <- colSums(DD.Set.dgel$counts)/1e6
+ DD.dgel$samples$lowCov <- totalCount.vec < 4
+ DD.dgel$samples$totCount <- totalCount.vec
+
+ glMDSPlot(DD.dgel, labels=SampleID.vec,
+           groups=DD.dgel$samples[, c("TrainValGroup", "SampType","lowCov")],###, "hiGC", "libConc")],
+           main=paste(DD, "- Represented genes"), ####, Excluding outlier samples"),
+           path = '.', folder = figure_DIR,
+           html = paste0(PREFIX,"GlMDSplot"), launch = F)
+
+```
+[GlMDSplot-local](`r file.path(figure_DIR, paste0(PREFIX,"GlMDSplot.html"))`)  
+[GlMDSplot-web server](`r file.path(WEB_SERVER_FIG_DIR, paste0(PREFIX,"GlMDSplot.html"))`)  
+
+
+
+<!--
+### Repeat unsupervised clustering on autosomal genes - DNA
+-->
+
+
+<!-- 
+### Repeat unsupervised clustering on autosomal genes, removing any zero count genes
+SKIP
+ DD.Set.cpm.mtx <- cpm(DD.Set.dgel)
+ ZeroCount.flg <- rowSums(DD.Set.cpm.mtx==0) > 0
+ mean(ZeroCount.flg)
+ DD.Set.noZ5hmC.dgel <- DD.Set.dgel[!ZeroCount.flg,, keep.lib.sizes=FALSE]
+ rm(ZeroCount.flg)
+ DD.Set.noZ5hmC.dgel <- calcNormFactors(DD.Set.noZ5hmC.dgel, method='TMM')
+ DD.Set.noZlcpm.mtx <- cpm(DD.Set.noZ5hmC.dgel, log=T)
+-->
+
+
+# Display samples using PCA + tsne
+
+Here we will generate tsne plots based on PCs.  Note that we do not 
+subset highly variable features in this case which differs from the
+analyses normally run when the predicive modeling data sets are 
+generated. 
+
+
+
+```{r pca, fig.height=6, fig.width=11,fig.cap="PCA %Variance Explained vs nPC", cache=F, echo=T}
+ 
+ # DO NOT RELOAD - ie. DO keep filtered data
+ #loadObj(paste0(DD, '.', SET, '.dgel'), 'DD.Set.dgel')
+
+ DD.Set.lcpm.mtx <- cpm(DD.Set.dgel, log=T)
+
+ ### NOTE: features should be in columns
+ if(nrow(DD.Set.lcpm.mtx) > ncol(DD.Set.lcpm.mtx)) DD.Set.lcpm.mtx <- t(DD.Set.lcpm.mtx)
+
+ # logCPM
+ DD.Set.Scaled.lcpm.mtx <- scale(DD.Set.lcpm.mtx)
+ DD.Set.lcpm.prcomp <- prcomp(DD.Set.Scaled.lcpm.mtx)
+ PropVar.vec <- cumsum(DD.Set.lcpm.prcomp$sdev^2)/sum(DD.Set.lcpm.prcomp$sdev^2)
+
+ MAXPC <- 50
+ plot( PropVar.vec, ylab="% Variance Explained", xlab='No. PC',xlim=c(1,MAXPC), type='l', xaxt='n',
+     lwd=2, col=1)
+ axis(side=1, at=seq(5,MAXPC,5), tick=F)
+ abline(h=c(.8, .85, .90), col='red')
+ #abline(h=c(.4, .5, .60)+.2, col='red')
+
+```
+
+Percent variablity explained keeps in increasing gradually up to nPC=50.
+
+```{r RtsnePCs, fig.height=10, fig.width=11,fig.cap="Rtsne plot with differing Number of  PCs",echo=T}
+ suppressPackageStartupMessages(require(Rtsne))
+ suppressPackageStartupMessages(require(ggplot2))
+
+ plotRtsne.f <- function(prcompX, nPC=15, Main='', 
+			 Annot = sampleTrainValGroup.vec,
+			 annotCol= groupCol.vec, 
+			 annotPch = groupPch.vec, LLOC = 'top', ...){
+
+  set.seed(12379)
+  nPC.Rtsne <- Rtsne(prcompX[, 1:nPC], check_duplicates=FALSE, pca=F,
+  perplexity=5, theta=0.5, dims=2)   # set perp to small value since our groups are not large
+
+  # getting the two dimension matrix
+  nPC.Rtsne.frm = as.data.frame(nPC.Rtsne$Y)
+  rownames(nPC.Rtsne.frm) <- rownames(prcompX)
+
+  # plot it
+  plot(x=nPC.Rtsne.frm$V1, xlab='',
+       y=nPC.Rtsne.frm$V2, ylab='',
+       col=annotCol[Annot[rownames(nPC.Rtsne.frm)]],
+       pch=annotPch[Annot[rownames(nPC.Rtsne.frm)]], ...)
+  title(Main)
+
+  #ggplot(nPC.Rtsne.frm, aes(V1, V2, colour=Annot)) + geom_point()
+
+ 
+  # two row legend
+  colLegend <- annotCol
+  pchLegend <- annotPch[names(annotCol)]
+  if(length(colLegend) %% 2) colLegend <- c(colLegend,NA)
+  if(length(pchLegend) %% 2) pchLegend <- c(pchLegend,NA)
+  legend_order <- matrix(1:length(colLegend), nrow=2, byrow=F)
+
+  legend(LLOC, horiz=F, bty='n', cex=0.75,
+	 legend=names(colLegend)[legend_order],
+	 col=colLegend[legend_order], 
+	 pch=pchLegend[legend_order], 
+     ncol=ncol(legend_order))
+
+  invisible(nPC.Rtsne.frm)
+ }
+ #################################
+
+ SampType.vec <- DD.Set.dgel$samples[rownames(DD.Set.lcpm.prcomp$x), "SampType"]
+ names(SampType.vec) <- rownames(DD.Set.lcpm.prcomp$x)
+
+ SampTypePch.vec <- seq(1, length(SampTypeCol.vec))
+ names(SampTypePch.vec) <- names(SampTypeCol.vec)
+
+ par(mfrow=c(2,1), mar=c(2,3,2,1),oma=c(0,0,2,0))
+ NPC <- 50
+   DD.Set.nPC.50.Rtsne.frm <- 
+   plotRtsne.f(prcompX=DD.Set.lcpm.prcomp$x, nPC=NPC, 
+     Annot = SampType.vec,
+     annotCol = SampTypeCol.vec, 
+     annotPch = SampTypePch.vec,
+     LLOC = 'bottomleft',
+     Main=paste('nPC = ', NPC))###, ylim=c(-70, 50) )
+
+ NPC <- 25
+   DD.Set.nPC.25.Rtsne.frm <- 
+   plotRtsne.f(prcompX=DD.Set.lcpm.prcomp$x, nPC=NPC, 
+     Annot = SampType.vec,
+     annotCol = SampTypeCol.vec, 
+     annotPch = SampTypePch.vec,
+     LLOC = 'bottomleft',
+     Main=paste('nPC = ', NPC))####, ylim=c(-70, 50) )
+
+  mtext(outer=T, side=3, cex=1.25,
+     paste(DD, SET, 'logCPM tsne plot with differing number  of PCs'))
+
+```
+
+<!--
+Write tsne coordinates and meta data to file.
+-->
+```{r write2file, eval=F, echo=F}
+
+  DD.Set.nPC.25.Rtsne.frm <- cbind(DD.Set.nPC.25.Rtsne.frm, DD.Set.dgel$samples[rownames(DD.Set.nPC.25.Rtsne.frm),])
+  #DT::datatable(DD.Set.nPC.25.Rtsne.frm)
+
+  write.table(DD.Set.nPC.25.Rtsne.frm,
+  file=file.path(table_DIR, paste0(DD, SET, '.nPC.25.Rtsne.tab')),
+   sep='\t', row.names=F, col.names=T)
+
+
+```
+
+### Interactive plot - AllSamples
+
+```{r plotlyRtsnePCsAllSamples, results="asis", fig.cap='Rtsne plot - AllSamples - nPC=25'}
+ #suppressPackageStartupMessages(require(plotly))
+ suppressPackageStartupMessages(require(scatterD3))
+
+ totalCount.vec <- colSums(DD.Set.dgel$counts)/1e6
+ DD.Set.dgel$samples$lowCov <- totalCount.vec < 4
+ DD.Set.dgel$samples$totCount <- totalCount.vec
+
+ scatterD3(x = DD.Set.nPC.50.Rtsne.frm$V1, y = DD.Set.nPC.50.Rtsne.frm$V2, data=NULL,
+ tooltip_text = with(DD.Set.dgel$samples,
+       paste0(Title,  ' <br> ', TrainValGroup, ' <br> ', SampType, ' <br> ', totCount)),
+ #symbol_var=AllSamples.diseaseTT.vec,
+ symbol_var=DD.Set.dgel$samples$SampType,
+ symbol_lab="SampType",
+ col_var=DD.Set.dgel$samples$lowCov,
+ col_lab="lowCov",
+
+ width=800, height=600,
+ caption="Rtsne plot - AllSamples - nPC=50")
+
+```
+
+
+<!-- 
+- [saveObj](`r file.path(help_DIR, 'saveObj.r')`) and
+[loadObj](`r file.path(help_DIR, 'loadObj.r')`) are used 
+to move objects between the file system and the workspace.
+- [getKappa](`r file.path(help_DIR, 'getKappa.r')`) computes Cohen's kappa 
+which we use as a measure of agreement between clutering results and labels.
+- [mtext2by2Tbl](`r file.path(help_DIR, 'mtext2by2Tbl.r')`) prints a 2 by 2 table below a plot.
+-->
+
+***
+# Parameter settings
+  * WRKDIR = `r normalizePath(WRKDIR)`
+  * FN = `r FN`
+  * Scripts = Scripts
+  * RUN DATE = `r date()`
+
+```{r, echo=FALSE}
+ sessionInfo()
+```
+
+
+```{r, echo=FALSE}
+  knit_exit()
+```
+
+### ARCHIVAL CODE BELOW
+<!-- ######################################################################## -->
+
+
+<!-- To run
+# nohup Rscript -e "knitr::knit2html('_M2A-lookHCCdataTUTI.Rmd')" > _M2A-lookHCCdataTUTI.log  &
+
+# Or
+# nohup Rscript -e "rmarkdown::render('_M2A-lookHCCdataTUTI.Rmd')" > _M2A-lookHCCdataTUTI.log  &
+
+-->

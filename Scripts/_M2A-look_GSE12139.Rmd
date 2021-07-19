@@ -1,0 +1,2167 @@
+---
+title: "Batch Effects Analysis - Examine GSE121239 Data from GEO"
+#subtitle: "Under Construction - For Discussion Only"
+author: "fcollin@grailbio.com"
+date: '`r format(Sys.time(), "%a %b %d %Y", tz="America/Los_Angeles")`' 
+output:
+  BiocStyle::html_document:
+    code_folding: hide
+    toc: true
+    # does this have an effect
+    fig_caption: yes
+    # this has no effect
+    number_sections: yes
+    css: ['../_css/pandoc3.css', '../_css/myMargins.css']
+bibliography: [../_bib/BatchEffect.bib]
+csl: ../_csl/cell-numeric.csl
+link-citations: true
+---
+ 
+<!-- EXCLUDE THESE STYLES
+h2 {
+  background-color: #D4DAEC;
+    text-indent: 100px;
+}
+h3 {
+  background-color: #dddddd;
+}
+.main-container {
+  max-width: 1100px !important;
+}
+-->
+
+<style>
+@import url('https://fonts.googleapis.com/css?family=Raleway');
+@import url('https://fonts.googleapis.com/css?family=Oxygen');
+@import url('https://fonts.googleapis.com/css?family=Raleway:bold');
+@import url('https://fonts.googleapis.com/css?family=Oxygen:bold');
+
+.main-container {
+  max-width: 900px !important;
+}
+
+body{
+  font-family: 'Oxygen', sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+h1,h2,h3,h4 {
+  font-family: 'Raleway', sans-serif;
+}
+
+.container { width: 1400px; }
+
+
+caption {
+  font-size: 20px;
+  caption-side: top;
+  text-indent: 30px;
+  background-color: lightgrey;
+  color: black;
+  margin-top: 5px;
+}
+
+g-table-intro h4 {
+  text-indent: 0px;
+}
+</style>
+
+
+
+```{r m2a-GlobalOptions, results="hide", include=FALSE, cache=FALSE, out.width.px=1, out.height.px=1}
+
+knitr::opts_knit$set(stop_on_error = 2L) #really make it stop
+options(knitr.table.format = 'html')
+
+options(stringsAsFactors=F)
+
+#knitr::dep_auto()
+
+```
+<!-- ######################################################################## -->
+
+
+
+```{r m2a-Prelims, include=FALSE, echo=FALSE, results='hide', message=FALSE, out.width.px=1, out.height.px=1} 
+
+ FN <- "_M2A-look_GSE12139"
+ PREFIX <- "M2A-"
+
+ suppressPackageStartupMessages(require(methods))
+ suppressPackageStartupMessages(require(rmarkdown))
+ suppressPackageStartupMessages(require(bookdown))
+
+ suppressPackageStartupMessages(require(knitr))
+ options(stringsAsFactors=F)
+ 
+ # NOT SURE WHAT THIS DOES???
+ suppressPackageStartupMessages(require(pander))
+ panderOptions('table.split.table', Inf)
+
+ suppressPackageStartupMessages(require(data.table)) 
+ options(datatable.fread.datatable=F)
+
+ suppressPackageStartupMessages(require(dplyr))
+ suppressPackageStartupMessages(require(magrittr))
+ #suppressPackageStartupMessages(require(Matrix))
+
+ # Shotcuts for knitting and redering while in R session (Invoke interactive R from R/Scripts folder)
+ kk <- function(n='') knitr::knit2html(paste("t", n, sep=''), envir=globalenv(),
+       output=paste(FN,".html", sep=''))
+
+ rr <- function(n='') rmarkdown::render(paste("t", n, sep=''), envir=globalenv(),
+       output_file=paste(FN,".html", sep='')) ##, output_dir='Scripts')
+
+ bb <- function(n='') browseURL(paste(FN,".html", sep=''))
+
+ # The usual shotcuts
+ zz <- function(n='') source(paste("t", n, sep=''))
+
+ # Using relative paths:
+ # Script will be invoked from R/Scripts folder.  Make 'R' the WRKDIR.
+ WRKDIR <- '.'
+
+ # Not needed if path ois relative ...
+ if(!file.exists(WRKDIR)) stop("WRKDIR ERROR: ", WRKDIR)
+
+ # do once
+ #setwd(WRKDIR)
+
+ # file rmarkdown file management options: cache, figures
+ cache_DIR <- file.path(WRKDIR, 'cache/M2A/')
+ suppressMessages(dir.create(cache_DIR, recursive=T))
+ opts_chunk$set(cache.path=cache_DIR)
+
+ # NOTE: need to add PREFIX to figure path
+ # due to confluence "feature" of keeping the filename of embedded figures
+
+ figures_DIR <- file.path(WRKDIR, 'figures/M2A/')
+ suppressPackageStartupMessages(dir.create(figures_DIR, recursive=T))
+ opts_chunk$set(fig.path=paste0(figures_DIR, PREFIX))
+
+ tables_DIR <- file.path(WRKDIR, 'tables/M2A/')
+ suppressMessages(dir.create(tables_DIR, recursive=T))
+ 
+ # need a local copy of help_DIR
+ #help_DIR <- file.path(WRKDIR, 'help_files')
+ help_DIR <- file.path('.', 'help_files')
+ suppressMessages(dir.create(help_DIR, recursive=T))
+ 
+ temp_DIR <- file.path(WRKDIR, 'temp_files')
+ suppressMessages(dir.create(temp_DIR, recursive=T))
+
+ # Additional Dirs
+ #glimma_DIR <- file.path(WRKDIR, 'glimma/M2A/')
+ #suppressMessages(dir.create(glimma_DIR, recursive=T))
+ 
+```
+<!-- ######################################################################## -->
+
+
+
+```{r m2a-utilityFns, echo=FALSE, out.width.px=1, out.height.px=1}
+ source('utilityFns.r')
+ #source('Mymva.r')
+
+```
+<!-- ######################################################################## -->
+
+***
+
+
+```{r m2a-voomhelp, echo=FALSE, cache=TRUE, cache.vars='limma.voom.path', out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+ limma.voom.path <- file.path(help_DIR, 'voom.limma.html')
+ static_help("limma", "voom", out=limma.voom.path)
+```
+```{r m2a-camerahelp, echo=FALSE, cache=TRUE, cache.vars='limma.camera.path', out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+ limma.camera.path <- file.path(help_DIR, 'camera.limma.html')
+ static_help("limma", "camera", out=limma.camera.path)
+```
+
+# Synopsis
+
+In this script we look at dimensionality reduction projections
+for one example dataset taken from an extensive set of analyses ran by
+Yang et al. (2021) [@Yang:2021aa].  Primary findings are:
+
+* UMAP, like t-sne, is extensively customizable leading to great power in
+detecting similarity patterns among high-dimensional vectors.  
+
+* In the context of batch-effect detection *and correction*
+it is not clear a-priori that UMAP will provide more useful information
+than other dimensionality reduction techniques commonly used to detect batch-effects,
+including methods based on linear projections such as PCA.  
+
+
+
+# Abstract
+
+In Yang et al. (2021) [@Yang:2021aa] the authors demonstrate the utility
+of UMAP (Uniform Manifold Approximation and Projection)
+(see McInness et al. (2018) [@McInnes:2018aa]) in discovering sample
+heterogeneity among bulk transcriptomic data.  The authors analyzed
+data from 71 bulk transcriptomic datasets with large sample sizes.
+In many datasets, known batch effects were verified.  In a few
+datasets, new batch efffect were uncovered. and in some
+cases an explanation for the newly uncervered source of systematic
+varibaility was arrived at.  
+
+In [_M1A-read_GSE12139.html](./_M1A-read_GSE12139.html) we downloaded
+the data from one such example from the GEO website: 
+[GSE121239](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE121239).
+These data were reported on in
+Petri et al. (2019) [@Petri:2019aa] and
+Toro-Dominguez et al. (2018) [@Toro-Dominguez:2018aa].
+
+In this script, we run some EDA analyses on these data.  In particular,
+we are interested in reproducing the cluster analyses that
+led to the discovery of new subgroups by 
+Yang et al. (2021) [@Yang:2021aa].
+
+
+<br/>
+
+# Set Analysis Parameters {-}
+
+```{r m2a-setAnalysisParameters, echo=T, cache=F, out.width.px=1, out.height.px=1}
+
+DD <- "GSE121239"
+
+ # MsigDB - DNA
+ ################################
+
+ # blacklist data 
+ # - need to get for Ensembl Mus_musculus.GRCg38.96
+ ##########################
+
+```
+
+# Load Data 
+
+**Note**: Throughout we use `sml` to label samples.
+This factor comes from 
+Yang et al. (2021) [@Yang:2021aa] and corresponds to a dicovered grouping
+of samples which has been related to the visit schedule.  See paper
+for details.  `sml` definition was taken from
+[https://github.com/yuImmuGroup/transcriptomic_analysis_DGE_and_GSEA](https://github.com/yuImmuGroup/transcriptomic_analysis_DGE_and_GSEA).
+
+```{r m2a-get-dgel, cache=T, cache.vars=c('DD.dgel'),eval=T, echo=T, out.width.px=1, out.height.px=1}
+
+loadObj(paste0(DD,'.dgel'), 'DD.dgel')
+
+cat("dim(DD.dgel)\n")
+dim(DD.dgel)
+
+
+with(DD.dgel$samples, table(diseaseState, sml))
+
+# Order by sml, sampNum visitDate
+DD.dgel$samples$sampNum <- 
+with(DD.dgel$samples, as.numeric(sub('Healthy', '', sub('SLE','',DD.dgel$samples$sampName))))
+
+o.v <- with(DD.dgel$samples,  order(sml, sampNum, visitDate))
+
+DD.dgel <- DD.dgel[, o.v]
+
+DT::datatable(DD.dgel$samples)
+ 
+# Are sampName ever in multiple sml groups
+#with(DD.dgel$samples, table(sampName, sml))
+
+```
+
+
+Annotation (silently) ...
+
+```{r m2a-get-annot, cache=T, cache.vars=c('diseaseStateCol.vec','smlCol.vec','diseaseStatePch.vec','smlPch.vec'), echo=T, out.width.px=1, out.height.px=1}
+
+########################################
+# Annotation 
+########################################
+suppressPackageStartupMessages(require(RColorBrewer))
+qual_col_pals <- brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector <- unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector[4] <- 'red'
+
+# Get group color
+# In what follows, groupings are context specific and may be either diseaseState or Conc
+
+# diseaseState Annotation
+diseaseStateLegend.vec <- sort(unique(DD.dgel$samples$diseaseState))
+diseaseStateCol.vec <- col_vector[1:length(diseaseStateLegend.vec)]
+names(diseaseStateCol.vec) <- diseaseStateLegend.vec
+
+diseaseStatePch.vec <- 1:length(diseaseStateLegend.vec)
+names(diseaseStatePch.vec) <- diseaseStateLegend.vec
+
+# sml Annotation
+smlLegend.vec <- sort(unique(DD.dgel$samples$sml))
+smlCol.vec <- col_vector[1:length(smlLegend.vec)]
+names(smlCol.vec) <- smlLegend.vec
+
+smlPch.vec <- 1:length(smlLegend.vec)
+names(smlPch.vec) <- smlLegend.vec
+
+
+
+```
+
+
+
+# Examine Coverage Distributions 
+
+
+## Examine log Intensity Distribution - unfiltered data {.tabset}
+
+
+### Boxplotx {-}
+
+```{r m2a-bxp-logInt-unfilt, echo=T, cache=T, cache.vars='', fig.height=6,fig.width=11, fig.cap="Boxplot log Intensity - Unfiltered data", out.width.px=1, out.height.px=1}
+
+boxplot(DD.dgel$counts, 
+         ylim=c(2,8),###ylim=range(log2(PC.dgel$counts+1))+c(0,1),
+         staplewex = 0,       # remove horizontal whisker lines
+         staplecol = "white", # just to be totally sure :)
+         outline = F,         # remove outlying points
+         whisklty = 0,        # remove vertical whisker lines
+         las=2, horizontal=F,  xaxt='n',
+         border=smlCol.vec[DD.dgel$samples$sml])
+
+title("log2 Intensity Distributions for Unfiltered Genes")
+
+legend('top', title='sml', text.col=smlCol.vec, legend=names(smlCol.vec), horiz=T)
+
+```
+
+* Although the intensity distributions appear to have been normalized,
+there as a difference among sml groups, with G_0 and G_1 exhibiting
+a wide distribution of instensities.
+
+### Tabular summaries {-}
+
+```{r m2a-tbl-logInt-unfilt, echo=T, cache=T, cache.vars='', fig.height=6,fig.width=11, fig.cap="Boxplot log Intensity - Unfiltered data", out.width.px=1, out.height.px=1}
+
+
+counts.mtx <- DD.dgel$counts
+
+countsSum.mtx <- sapply(1:ncol(counts.mtx), function(CC)
+   c(quantile(counts.mtx[,CC], pro=c(.25,.5,.75)),
+   TotalK=sum(counts.mtx[,CC])/1e3)) ###, pZ=mean(counts.mtx[,CC]==0)))
+  colnames(countsSum.mtx) <- colnames(counts.mtx)
+
+countsSum.frm <-
+  data.frame(
+    DD.dgel$samples[colnames(countsSum.mtx),] %>%
+      dplyr::select(sml, sampName, sampV),
+    round(t(countsSum.mtx),3)
+    )
+
+
+#kable(countsSum.frm, caption="Coverage Summary - Unfiltered Data") %>%
+   #kableExtra::kable_styling(full_width = F)
+
+DT::datatable(countsSum.frm, caption="Coverage Summary - Unfiltered Data")
+
+```
+
+<br/>
+
+
+
+### Boxplot RLE {-}
+
+
+```{r m2a-bxp-rle, echo=T, cache=T, fig.height=6,fig.width=11, fig.cap="Boxplot RLEs", out.width.px=1, out.height.px=1}
+
+DD.logInt.mtx <- DD.dgel$counts
+
+median.vec <- apply(DD.logInt.mtx, 1, median)
+RLE.mtx <- sweep(DD.logInt.mtx,1,median.vec)
+
+boxplot(RLE.mtx,
+         ylim=c(-1,1),###ylim=range(log2(PC.dgel$counts+1))+c(0,1),
+         staplewex = 0,       # remove horizontal whisker lines
+         staplecol = "white", # just to be totally sure :)
+         outline = F,         # remove outlying points
+         whisklty = 0,        # remove vertical whisker lines
+         las=2, horizontal=F,  xaxt='n',
+         border=smlCol.vec[DD.dgel$samples$sml])
+abline(h=0, col='red')
+
+title("RLEs for log Intensity Values")
+
+
+```
+
+* RLEs make the differences in distributional shape quite obvious.
+
+<br/>
+
+## Examine lcpm Distributions - filtered data  - SKIP
+
+
+With Affymetirx data filtering is typically on most variable genes
+and is only done to reduce the dimension of the precitor matrix,
+not to remove problematic, low coverage genes as is the case for RNA_Seq.
+We'll skip this step for now.
+
+
+
+
+# Unsupervised clustering of samples
+
+
+
+## MDS Plots
+
+Look at MDS plots annotated by group. 
+
+
+```{r m2a-plotMDS1, echo=F, cache=T, cache.vars='', fig.height=6, fig.width=11,fig.cap="MDS plots of log Intensity values", out.width.px=1, out.height.px=1}
+
+DD.logInt.mtx <- DD.dgel$counts
+
+ # par; rows=annotation, cols=dimensions
+ par(mfrow=c(1,2), mar=c(4,4,2,1))
+
+ # sml
+ tmp <- plotMDS(DD.logInt.mtx, #labels=DD.dgel$samples$sml, 
+         pch=1,
+         col=smlCol.vec[DD.dgel$samples$sml])
+ title("By sml, dim 1,2")
+
+
+ tmp <- plotMDS(DD.logInt.mtx, #labels=DD.dgel$samples$sml,
+         pch=1,
+         col=smlCol.vec[DD.dgel$samples$sml], dim=c(3,4))
+ title("By sml, dim 3,4")
+
+ legend('topright', title='sml', title.col=1, legend=names(smlCol.vec), text.col=smlCol.vec,
+   bty='n')
+
+
+```
+
+***
+
+<!-- SKIP THIS - moist useful with string clusters and many or unknown factors 
+
+The Glimma package offers the convenience of an interactive MDS plot where multiple
+dimensions can be explored. The glMDSPlot function generates an html page
+(that is opened in a browser if launch=TRUE) with an MDS plot in the left panel
+and a barplot showing the proportion of variation explained by each dimension in the right panel.
+Clicking on the bars of the bar plot changes the pair of dimensions plotted in the MDS plot,
+and hovering over the individual points reveals the sample label. The colour scheme can
+be changed as well to highlight various factors.
+-->
+
+<!--
+**BEWARE - Colors are may not be unique**
+-->
+```{r m2a-MDSplotByTissue, cache=T, cache.vars='', out.width.px=1, out.height.px=1, eval=F, echo=F, out.width.px=1, out.height.px=1}
+
+ suppressPackageStartupMessages(require(Glimma))
+   glMDSPlot(DD.dgel, top = 500, labels = colnames(DD.dgel),
+       groups = DD.dgel$samples[, c("sml", "ConcF", "TimeF")], 
+       gene.selection = c("pairwise", "common"),
+       main = "MDS Plot of log Intensity", 
+       path = '.', folder = figures_DIR,
+       html = paste0(PREFIX,"MDSplotByTissue"), launch = F)
+
+```
+     
+
+## Hierarchical Clustering View of Coverage correlations
+
+May be too many samples for this to be useful...
+
+`r CLUSTMETH <- 'complete'; cat('**Clustering with complere linkage**')`
+
+
+```{r m2a-hclust, fig.height=12, fig.width=11,fig.cap="Hierarchical Clustering Plot of Coverage Correlations",cache=T,cache.vars=c(''),eval=T, echo=T, cache=T,cache.vars='', out.width.px=1, out.height.px=1}
+ 
+### CLEAR CACHE
+
+#suppressPackageStartupMessages(require(epiR))
+Lc.f <- function(x, y) epiR::epi.occc(cbind(x, y))$occc
+
+
+ ## function to set label color
+ labelCol <- function(x, labCol=NULL) {
+  if (is.leaf(x)) {
+    ## fetch label
+    label <- attr(x, "label")
+    ## set label color to red for A and B, to blue otherwise
+    if(!is.null(labCol)) attr(x, "nodePar") <- list(lab.col=labCol[label], lab.cex=1.0)
+                                      #ifelse(label %in% c("A", "B"), "red", "blue"))
+   }
+   return(x) }
+  #########################################
+
+DD.logInt.mtx <- DD.dgel$counts
+
+tmp.mtx <- DD.logInt.mtx
+colnames(tmp.mtx) <- with(DD.dgel$samples, paste0(sml, '_', sampNum))
+
+
+# Get Color vector prior to renaming columns
+tmp.smlCol.vec <- smlCol.vec[DD.dgel$samples$sml]
+names(tmp.smlCol.vec) <- colnames(tmp.mtx)
+
+# Get corr/dist/hclust
+tmp.dist <- proxy::dist(tmp.mtx,
+  by_rows = F,
+  method=function(x,y) 1 - Lc.f(x, y)
+)
+
+tmp.dist <- hclust(tmp.dist, method = CLUSTMETH)
+tmp.dist <-
+  dendrapply(as.dendrogram(tmp.dist), labelCol, labCol = tmp.smlCol.vec)
+
+
+# Plot
+par(mar = c(4, 4, 2, 12), xpd = F)
+plot(tmp.dist,
+  xlab = "1 - LinC", ylab = "", sub = "", xlim = c(0.05, 0),
+  horiz = T, xaxt = "n", yaxt = "n",
+  main = ""  ###paste("Clustering on Lin's C")
+)
+abline(v = (1:5) / 100, col = "grey")
+axis(
+  side = 1, at = c(0, .01, .02, .03, .04, .05, .1, .15),
+  labels = 1 - c(0, .01, .02, .03, .04, .05, .1, .15)
+)
+
+ 
+title("Hierarchical Clustering Plot of Coverage Lin's C")
+
+```
+
+<br/>
+
+## PCA Plots
+
+
+```{r m2a-plotPCA, echo=F, cache=T, cache.vars='', fig.height=6, fig.width=11,fig.cap="PCA plots of log Intensity values", out.width.px=1, out.height.px=1, eval=F, echo=F, out.width.px=1, out.height.px=1}
+
+# don't know why this doesn't work!!!
+
+DD.logInt.mtx <- DD.dgel$counts
+EDASeq::plotPCA(DD.logInt.mtx, isLog=T, k=4, col=smlCol.vec[DD.dgel$samples$sml])
+
+```
+
+```{r m2a-plot-prcomp-proj, echo=F, cache=T, cache.vars='DD.logInt.prcomp', fig.height=6, fig.width=11,fig.cap="PCA - Projections", out.width.px=1, out.height.px=1}
+
+### NOTE: features should be in columns, or should they???
+DD.logInt.mtx <- DD.dgel$counts
+
+DD.Scaled.logInt.mtx <- scale(DD.logInt.mtx)
+DD.logInt.prcomp <- prcomp(DD.Scaled.logInt.mtx)
+
+# Princ Comp of samples
+pairs(DD.logInt.prcomp$rotation[, 1:4],
+ lower.panel=NULL,
+ panel=function(x,y){
+   points(x, y,
+   pch=1,
+   col=smlCol.vec[DD.dgel$samples[rownames(DD.logInt.prcomp$rotation), "sml"]])
+ })
+
+old_par <- par(xpd=NA)
+
+legend(0, .6, title='sml', title.col=1, legend=names(smlCol.vec), text.col=smlCol.vec, bty='n')
+
+
+par(old_par)
+
+
+  
+```
+
+
+## Display samples using PCA + tsne
+
+Here we will generate tsne plots based on PCs.  Note that we do not 
+subset highly variable features in this case which differs from the
+analyses normally run when the predicive modeling data sets are 
+generated. 
+
+
+
+```{r m2a-plot-prcomp-scree, echo=F, cache=T, cache.vars='DD.logIntT.prcomp', fig.height=6, fig.width=11,fig.cap="PCA - Scree Plot", out.width.px=1, out.height.px=1}
+
+
+### NOTE: features should be in Columns
+DD.logIntT.mtx <- t(DD.dgel$counts)
+
+DD.Scaled.logIntT.mtx <- scale(DD.logIntT.mtx)
+DD.logIntT.prcomp <- prcomp(DD.Scaled.logIntT.mtx)
+PropVar.vec <- cumsum(DD.logIntT.prcomp$sdev^2)/sum(DD.logIntT.prcomp$sdev^2)
+
+MAXPC <- 50
+plot( PropVar.vec, ylab="% Variance Explained", xlab='No. PC',xlim=c(1,MAXPC), type='l', xaxt='n',
+     lwd=2, col=1)
+axis(side=1, at=seq(5,MAXPC,5), tick=F)
+#abline(h=c(.8, .85, .90), col='red')
+abline(h=c(.4, .5, .60), col='red')
+
+```
+
+
+* The scree plot shows that there is an albow at nPC ~ 10 and that the
+percent variablity explained keeps in increasing gradually up to nPC=50.
+
+```{r m2a-RtsnePCs, fig.height=10, fig.width=11,fig.cap="Rtsne plot with differing Number of  PCs",echo=T, out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(Rtsne))
+ suppressPackageStartupMessages(require(ggplot2))
+
+plotRtsne.f <- function(prcompX, nPC=15, Main='', 
+			 #Annot = DD.dgel$samples$sml,
+			 annotCol= 1,
+			 annotPch = 1, 
+                         LLOC = NULL, ...){
+
+  set.seed(12379)
+  nPC.Rtsne <- Rtsne::Rtsne(prcompX[, 1:nPC], check_duplicates=FALSE, pca=F,
+  perplexity=5, theta=0.5, dims=2)   # set perp to small value since our groups are not large
+
+  # getting the two dimension matrix
+  nPC.Rtsne.frm = as.data.frame(nPC.Rtsne$Y)
+  rownames(nPC.Rtsne.frm) <- rownames(prcompX)
+
+  # plot it
+  plot(x=nPC.Rtsne.frm$V1, xlab='',
+       y=nPC.Rtsne.frm$V2, ylab='',
+       col=annotCol,
+       pch=annotPch, ...)
+  title(Main)
+
+  invisible(nPC.Rtsne.frm)
+ }
+#################################
+
+
+par(mfrow=c(2,1), mar=c(2,3,2,1),oma=c(0,0,2,0))
+NPC <- 50
+DD.Set.nPC.50.Rtsne.frm <- 
+   plotRtsne.f(prcompX=DD.logIntT.prcomp$x, nPC=NPC, 
+     annotCol = smlCol.vec[DD.dgel$samples[rownames(DD.logIntT.prcomp$x),"sml"]],
+     annotPch = 1,
+     Main=paste('nPC = ', NPC))###, ylim=c(-70, 50) )
+
+NPC <- 25
+DD.Set.nPC.25.Rtsne.frm <- 
+   plotRtsne.f(prcompX=DD.logIntT.prcomp$x, nPC=NPC, 
+     annotCol = smlCol.vec[DD.dgel$samples[rownames(DD.logIntT.prcomp$x),"sml"]],
+     annotPch = 1,
+     Main=paste('nPC = ', NPC))###, ylim=c(-70, 50) )
+
+mtext(outer=T, side=3, cex=1.25,
+     paste(DD, 'log intensity tsne plot with differing number  of PCs'))
+
+```
+
+
+## UMAP Projections {.tabset}
+
+See [Uniform Manifold Approximation and Projection in R](https://cran.r-project.org/web/packages/umap/vignettes/umap.html)
+vignette for a description of the implementation of the UMAP algorithm in R.
+As in Yang et al. (2021) [@Yang:2021aa], we will try three metrics:  ‘euclidean’, ‘canberra’ and ‘cosine’.^[canberra metric is not available at this point].
+
+Also see the now archived UMAP R implementation
+[https://github.com/ropensci-archive/umapr](https://github.com/ropensci-archive/umapr).
+
+
+
+
+### euclidean {-}
+
+```{r m2a-umap-euclidean, fig.height=6, fig.width=11,fig.cap="UMAP Projections - metric = euclidean",echo=T, out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(umap))
+
+# Features must be in the columns; rows are samples/observations
+DD.logIntT.mtx <- t(DD.dgel$counts)
+
+par(mfrow=c(1,3), mar=c(2,2,2,2), oma=c(0,0,2,0))
+
+for(NN in c(8, 16, 32)){
+DD.logIntT.umap <- umap::umap(DD.logIntT.mtx, metric="euclidean", n_neighbors=NN)
+
+plot(x=DD.logIntT.umap$layout[,1], y=DD.logIntT.umap$layout[,2], 
+     pch=1, col=smlCol.vec[DD.dgel$samples[rownames(DD.logIntT.umap$layout),"sml"]])
+title(paste0("n_neighbors = ", NN))
+
+}
+
+mtext(outer=T, side=3, "UMAP Projections - metric = euclidean")
+
+
+```
+
+
+
+### cosine {-}
+
+```{r m2a-umap-cosine, fig.height=10, fig.width=11,fig.cap="UMAP Projections - metric = canberra",echo=T, out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(umap))
+
+# Features must be in the columns; rows are samples/observations
+DD.logIntT.mtx <- t(DD.dgel$counts)
+
+par(mfrow=c(1,3), mar=c(2,2,2,2), oma=c(0,0,2,0))
+
+for(NN in c(8, 16, 32)){
+DD.logIntT.umap <- umap::umap(DD.logIntT.mtx, metric="cosine", n_neighbors=NN)
+
+plot(x=DD.logIntT.umap$layout[,1], y=DD.logIntT.umap$layout[,2],
+     pch=1, col=smlCol.vec[DD.dgel$samples[rownames(DD.logIntT.umap$layout),"sml"]])
+title(paste0("n_neighbors = ", NN))
+
+}
+
+mtext(outer=T, side=3, "UMAP Projections - metric = cosine")
+
+
+```
+
+<!-- DOESNT WORK
+### canberra
+-->
+```{r m2a-umap-canberra, fig.height=10, fig.width=11,fig.cap="UMAP Projections - metric = canberra",echo=T, out.width.px=1, out.height.px=1, eval=F, echo=F}
+
+canberra_f <- function(matrix, origin, target) 
+  OmicsMarkeR::canberra(matrix[,origin], matrix[,target])
+
+
+# Features must be in the columns; rows are samples/observations
+DD.logIntT.mtx <- t(DD.dgel$counts)
+
+par(mfrow=c(1,3), mar=c(2,2,2,2), oma=c(0,0,2,0))
+
+for(NN in c(8, 16, 32)){
+DD.logIntT.umap <- umap::umap(DD.logIntT.mtx, metric=canberra_f, n_neighbors=NN)
+
+plot(x=DD.logIntT.umap$layout[,1], y=DD.logIntT.umap$layout[,2],
+     pch=1, col=smlCol.vec[DD.dgel$samples[rownames(DD.logIntT.umap$layout),"sml"]])
+title(paste0("n_neighbors = ", NN))
+
+}
+
+mtext(outer=T, side=3, "UMAP Projections - metric = canberra")
+
+
+```
+
+## STOP HERE
+
+
+# References
+<div id="refs"></div>
+
+# Appendix
+
+
+## Parameter settings
+  * WRKDIR = `r WRKDIR`
+  * FN = `r FN`
+  * Scripts = Scripts
+  * RUN DATE = `r date()`
+
+
+## Session Info
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+ sessionInfo()
+```
+
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+  knit_exit()
+```
+
+
+# Differential expression analysis
+
+**Note** that in this dry-run, we only consider differences between
+`diseaseState` levels and ignore the `Time` and `Conc` components.
+
+
+## Create design matrix and contrasts
+
+We are interested to see which genes are expressed at different levels in the 
+different groups: `r levels(DD.dgel$samples$diseaseState)`.  In this analysis, 
+based on methods implemented in the `limma` package, linear models
+are fitted to the data with the assumption that the underlying data are 
+approximately normally distributed.  To get started, a design matrix is set up 
+with `group` information only.  Note that we have excluded chrX and chrY
+genes from the data set so `sex` should not be a significant factor
+in many genes.  In this initial analysis we will also ignore `age` as a
+potential factor affecting gene expression.  (*We* have no age and sex info for GTEx samples)
+
+In what follows, we will look at variability across sml levels, as opposed to the more granular Conc.  
+<!-- NO LONGER NEEDED 
+We will re-balance the data set to ensure we have comparable number of samples across the different factor levels.
+-->
+
+
+```{r m2a-getDesign, cache=F, out.width.px=1, out.height.px=1}
+
+
+ diseaseStateDesign <- with(DD.dgel$samples, model.matrix( ~ -1 + diseaseState))
+ colnames(diseaseStateDesign) <- sub('diseaseState','', colnames(diseaseStateDesign))
+
+ diseaseStateDesign[1:5,]
+
+diseaseStateContrasts <- makeContrasts(
+ DMSOvsUntr = DMSO - Untr,
+ H4vsUntr = H4 - Untr,
+ X85vsUntr = X85 - Untr,
+ X87vsUntr = X87 - Untr,
+ 
+ levels=colnames(diseaseStateDesign))
+
+ diseaseStateContrasts
+
+```
+
+## Removing heteroscedascity from the count data
+
+It has been shown that for RNA-seq count data, the variance is not independent of the mean 
+(Law et al. 2014 [@Law:2014aa]) - this is true of raw counts or when transformed to log Intensity values.
+Methods that model counts using a Negative Binomial distribution assume a quadratic mean-variance relationship.
+In `limma`  linear modelling is carried out on the log Intensity values which are assumed to be normally 
+distributed and the mean-variance relationship is accommodated using precision weights calculated by the 
+[voom](`r limma.voom.path`) function.
+
+When operating on a DGEList-object, **voom** converts raw counts to log Intensity values by automatically 
+extracting library sizes and normalisation factors from the DGEList object itself.
+Additional normalisation to log Intensity values can be specified within **voom** using the **normalize.method** argument.
+
+The mean-variance relationship of log Intensity values for this dataset is shown in the left-hand panel of the next figure.
+Typically, the voom-plot shows a decreasing trend between the means and variances resulting from a combination of
+technical variation in the sequencing experiment and biological variation amongst the replicate samples
+from different groups. Experiments with high biological variation usually result in flatter trends,
+where variance values plateau at high expression values. Experiments with low biological variation tend to result
+in sharp decreasing trends.
+
+*Moreover, the voom-plot provides a visual check on the level of filtering performed upstream. If filtering of lowly-expressed genes is insufficient, a drop in variance levels can be observed at the low end of the expression scale due to very small counts. If this is observed, one should return to the earlier filtering step and increase the expression threshold applied to the dataset.*
+
+Where sample-level variation is evident from earlier inspections of the MDS plot,
+the voomWithQualityWeights function can be used to simultaneously incorporate sample-level weights
+together with the abundance dependent weights estimated by voom (Liu et al. 2015) [@Liu:2015aa].
+For an example of this, see Liu et al. (2016) [@Liu:2016aa].
+
+Linear modelling in limma is carried out using the lmFit and contrasts.fit functions
+originally written for application to microarrays. The functions can be used for both microarray
+and RNA-seq data and fit a separate model to the expression values for each gene.
+Next, empirical Bayes moderation is carried out by borrowing information across all the
+genes to obtain more precise estimates of gene-wise variability (Smyth 2004 [@Smyth:2004aa).
+The model’s residual variances are plotted against average expression values in the next figure.
+It can be seen from this plot that the variance is no longer dependent on the mean expression level.
+
+```{r m2a-voom, cache=T, cache.vars=c('DD.voom','DD.voom.fit','DD.voom.efit'), fig.height=6, fig.width=11, fig.cap="Removing heteroscedascity - voom plots", out.width.px=1, out.height.px=1}
+ # MyplotSA is limma::plotSA with return xy.mtx
+ source('MyplotSA.r')
+
+ par(mfrow=c(1,2))
+ DD.voom <- limma::voom(DD.dgel, diseaseStateDesign, plot=TRUE)
+ #DD.voom[,1:4]
+
+ DD.voom.fit <- limma::lmFit(DD.voom, diseaseStateDesign)
+ DD.voom.fit <- limma::contrasts.fit(DD.voom.fit, contrasts=diseaseStateContrasts)
+ DD.voom.efit <- limma::eBayes(DD.voom.fit)
+ xy.mtx <- MyplotSA(DD.voom.efit, main="Final model: Mean−variance trend")
+ lines(lowess(x=xy.mtx[,1], y=xy.mtx[,2], f=.25), col='red', lwd=2)
+
+```
+
+<!--
+Note that the other data frames stored within the DGEList-object that contain gene- and sample-level information,
+are retained in the EList-object created by **voom**. The v$genes data frame is equivalent to x$genes, 
+v$targets is equivalent to x$samples, and the expression values stored in v$E is analogous to x$counts,
+albeit on a transformed scale. In addition to this, the voom EList-object has a matrix of precision
+weights v$weights and stores the design matrix in v$design.
+-->
+
+In  Holik et al., 2017 [@Holik:2017aa], voom with quality weights performed
+better than other methods in terms of recovering truth in a mxture experiment.
+We'll add this analysis here too.
+
+```{r m2a-voomqw, cache=T, cache.vars=c('DD.voomqw','DD.voomqw.fit','DD.voomqw.efit'), fig.height=6, fig.width=11, fig.cap="Removing heteroscedascity - voomqw plots", echo=F, eval=T, out.width.px=1, out.height.px=1}
+
+ par(mfrow=c(1,3))
+ DD.voomqw <- voomWithQualityWeights(DD.dgel, diseaseStateDesign, plot=TRUE)
+ #DD.voomqw[,1:4]
+
+ DD.voomqw.fit <- lmFit(DD.voomqw, diseaseStateDesign)
+ DD.voomqw.fit <- contrasts.fit(DD.voomqw.fit, contrasts=diseaseStateContrasts)
+ DD.voomqw.efit <- eBayes(DD.voomqw.fit)
+ xy.mtx <- MyplotSA(DD.voomqw.efit, main="Final model: Mean−variance trend")
+ lines(lowess(x=xy.mtx[,1], y=xy.mtx[,2], f=.25), col='red', lwd=2)
+
+```
+
+
+# Examining DE genes
+
+For a quick look at differential expression levels, the number of significantly up- and down-regulated genes
+can be summarised in a table. Significance is defined using an adjusted p-value cutoff that is set at 5% by default.
+
+
+```{r m2a-overlapDE, cache=T, cache.vars=c('DD.voom.efit.dt'), out.width.px=1, out.height.px=1}
+
+
+ # kelly's colors - https://i.kinja-img.com/gawker-media/image/upload/1015680494325093012.JPG
+ # https://gist.github.com/ollieglass/f6ddd781eeae1d24e391265432297538
+ KellyColors.vec <- c('#F3C300', '#875692', '#F38400', '#A1CAF1',
+                      '#BE0032', '#C2B280', '#848482', '#008856', '#E68FAC', '#0067A5',
+                      '#F99379', '#604E97', '#F6A600', '#B3446C', '#DCD300', '#882D17',
+                      '#F2F3F4', '#222222',  ### shifted down from pos 1:2
+                      '#8DB600', '#654522', '#E25822', '#2B3D26')
+
+ with(DD.dgel$samples, table(diseaseState))
+
+ DD.voom.efit.dt <- decideTests(DD.voom.efit,adjust.method = "BH", p.value = 0.05)
+
+ summary(DD.voom.efit.dt)
+ 
+ cat("Compare with voomqw:\n")
+ DD.voomqw.efit.dt <- decideTests(DD.voomqw.efit,adjust.method = "BH", p.value = 0.05)
+ summary(DD.voomqw.efit.dt)
+
+```
+
+We note that `voomqw` identifies significantly more genes.
+
+```{r m2a-treathelp, echo=FALSE, cache=TRUE, cache.vars='limma.treat.path', eval=F, out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+ limma.treat.path <- file.path(help_DIR, 'treat.limma.html')
+ static_help("limma", "treat", out=limma.treat.path)
+```
+
+For a stricter definition on significance, one may require log-fold-changes (log-FCs) to be above a minimum value.
+The **treat** method (McCarthy and Smyth 2009 [@McCarthy:2009aa])
+can be used to calculate p-values from empirical Bayes moderated t-statistics with a minimum
+log-FC requirement. The number of differentially expressed genes are greatly reduced 
+if we impose a minimal fold-change requirement of **2-fold**.
+
+```{r m2a-treat, cache=T, cache.vars=c('DD.voom.tfit','DD.voom.tfit.dt'), out.width.px=1, out.height.px=1}
+
+ DD.voom.tfit <- treat(DD.voom.fit, lfc=log2(2.00))
+ DD.voom.tfit.dt <- decideTests(DD.voom.tfit)
+ summary(DD.voom.tfit.dt)
+
+ DE.ndx <- which(rowSums(abs(DD.voom.tfit.dt) == 1) > 0)
+ length(DE.ndx)
+
+ # The complement of these, are the genes that do not have significant effect in any tissue
+ NDE.ndx <- which(rowSums(abs(DD.voom.tfit.dt) == 1) == 0)
+ length(NDE.ndx)
+
+ # repeat without effect size requirement
+ DE.ndx <- which(rowSums(abs(DD.voom.efit.dt) == 1) > 0)
+ length(DE.ndx)
+
+ # The complement of these, are the genes that do not have significant effect in any tissue
+ NDE.ndx <- which(rowSums(abs(DD.voom.efit.dt) == 1) == 0)
+ #length(NDE.ndx)
+ ### We need some effect size constraints
+
+ saveObj(paste0(DD,'subNoXY.voom.tfit.dt'), 'DD.voom.tfit.dt')
+
+``` 
+
+Repeat with `voomqw`.
+
+
+```{r m2a-treatqw, cache=T, cache.vars=c('DD.voomqw.tfit','DD.voomqw.tfit.dt'), out.width.px=1, out.height.px=1}
+
+ DD.voomqw.tfit <- treat(DD.voomqw.fit, lfc=log2(2.00))
+ DD.voomqw.tfit.dt <- decideTests(DD.voomqw.tfit)
+ summary(DD.voomqw.tfit.dt)
+
+ DE.ndx <- which(rowSums(abs(DD.voomqw.tfit.dt) == 1) > 0)
+ length(DE.ndx)
+
+ # The complement of these, are the genes that do not have significant effect in any tissue
+ NDE.ndx <- which(rowSums(abs(DD.voomqw.tfit.dt) == 1) == 0)
+ #length(NDE.ndx)
+
+ saveObj(paste0(DD,'subNoXY.voomqw.tfit.dt'), 'DD.voomqw.tfit.dt')
+``` 
+
+**Note that putting a fold-change threshold in gene identification, results in 
+a significant imbalance between the number of over and under-expressed genes indentified**.
+
+
+## Examining individual DE genes {#indivDEgenes}
+
+```{r m2a-efitToptable, cache=T, cache.vars='', out.width.px=1, out.height.px=1}
+ #suppressPackageStartupMessages(require(xtable))
+ suppressPackageStartupMessages(require(DT))
+
+ # use tfit (treat) 
+ DD.voomqw.efit.tbl <- topTable(DD.voomqw.efit, number=Inf)
+ tmp <- DD.voomqw.efit.tbl
+
+ for(V in c(colnames(diseaseStateContrasts), "AveExpr", "F"))
+ tmp[,V] <- round( tmp[,V],4)
+
+ DT::datatable(tmp,rownames=F,editable=F,options=list(pageLength=16))
+
+ # write to a file
+ DD.voomqw.efit.dt <- decideTests(DD.voomqw.efit,adjust.method = "BH", p.value = 0.05)
+ write.fit(DD.voomqw.efit, DD.voomqw.efit.dt, file=paste0(figures_DIR, PREFIX, DD, '.voomqw.efit.txt'), col.names=NA)
+
+ DD.voomqw.tfit.dt <- decideTests(DD.voomqw.tfit,adjust.method = "BH", p.value = 0.05)
+ write.fit(DD.voomqw.tfit, DD.voomqw.tfit.dt, file=paste0(figures_DIR, PREFIX, DD, '.voomqw.tfit.txt'), col.names=NA)
+
+```
+
+## Graphical representations of differential expression results: MD Plots {#MDPlots}
+
+```{r m2a-plotMDhelp, echo=FALSE, cache=TRUE, cache.vars='limma.plotMD.path', out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+ limma.plotMD.path <- file.path(help_DIR, 'plotMD.limma.html')
+ static_help("limma", "plotMD", out=limma.plotMD.path)
+```
+
+
+To summarise results for all genes visually, mean-difference plots (aka MA plot), which display
+log-FCs from the linear model fit against the average log Intensity values can be
+generated using the [plotMD](`r limma.plotMD.path`) function, with the differentially expressed genes highlighted.
+
+
+```{r m2a-plotMD-efit, cache=T, cache.vars='', fig.height=8, fig.width=11, fig.cap="MD plots - efit", out.width.px=1, out.height.px=1}
+
+ # NOTE - we don't save these as they are very cheap to compute
+
+ DD.voomqw.efit.dt <- decideTests(DD.voomqw.efit,adjust.method = "BH", p.value = 0.05)
+ DD.voomqw.tfit.dt <- decideTests(DD.voomqw.tfit,adjust.method = "BH", p.value = 0.05)
+
+ par(mfcol=c(2,3), mar=c(1,2,3,1))
+ 
+ # H4 - efit (100% FC)
+ plotMD(DD.voomqw.efit, 
+        column=grep('H4', colnames(DD.voomqw.efit)), 
+        status=DD.voomqw.efit.dt[,grep('H4', colnames(DD.voomqw.efit.dt))])
+ boxplot(split(DD.voomqw.efit$Amean,
+          DD.voomqw.efit.dt[,grep('H4', colnames(DD.voomqw.efit.dt))]), horizontal=T,
+   outline=F, border=c('blue', 'black', 'red'))
+
+ # X85 - efit (100% FC)
+ plotMD(DD.voomqw.efit, 
+        column=grep('X85', colnames(DD.voomqw.efit)), 
+        status=DD.voomqw.efit.dt[,grep('X85', colnames(DD.voomqw.efit.dt))])
+ boxplot(split(DD.voomqw.efit$Amean,
+          DD.voomqw.efit.dt[,grep('X85', colnames(DD.voomqw.efit.dt))]), horizontal=T,
+   outline=F, border=c('blue', 'black', 'red'))
+
+
+ # X87 - efit (100% FC)
+ plotMD(DD.voomqw.efit, 
+        column=grep('X87', colnames(DD.voomqw.efit)), 
+        status=DD.voomqw.efit.dt[,grep('X87', colnames(DD.voomqw.efit.dt))])
+ boxplot(split(DD.voomqw.efit$Amean,
+          DD.voomqw.efit.dt[,grep('X87', colnames(DD.voomqw.efit.dt))]), horizontal=T,
+   outline=F, border=c('blue', 'black', 'red'))
+
+
+
+```
+ 
+<!-- SKIP
+Another interesting set of genes, are the genes that have no significant effect in any of the
+tissue types.
+-->
+
+
+```{r m2a-glMDPlothelp, echo=FALSE, cache=TRUE, cache.vars='Glimma.glMDPlot.path', out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+ Glimma.glMDPlot.path <- file.path(help_DIR, 'glMDPlot.Glimma.html')
+ static_help("Glimma", "glMDPlot", out=Glimma.glMDPlot.path)
+```
+
+`Glimma` extends this functionality by providing an interactive mean-difference plot via the 
+[glMDPlot](`r Glimma.glMDPlot.path`) function.  The output of this function is an html page,
+with summarised results in the left panel (similar to what is output by plotMD),
+and the log Intensity values from individual samples in the right panel, with a table of results
+below the plots. This interactive display allows the user to search for particular genes
+based on their Gene symbol, which is not possible in a static R plot.
+The [glMDPlot](`r Glimma.glMDPlot.path`) function is not limited to mean-difference plots, with a default
+version allowing a data frame to be passed with the user able to select the columns of interest
+to plot in the left panel.
+
+```{r m2a-MDplots-voomqw-efit-H4, cache=T, cach.vars='', out.width.px=1, out.height.px=1}
+suppressPackageStartupMessages(require(Glimma))
+DD.voomqw.efit.dt <- decideTests(DD.voomqw.efit,adjust.method = "BH", p.value = 0.05)
+
+CONTRAST <- 'H4vsUntr'
+
+
+ glMDPlot(DD.voomqw.efit,
+          coef=CONTRAST, 
+          status=DD.voomqw.efit.dt,
+          main=paste(CONTRAST),
+          #values=c(0,1), hl.col=c("grey","purple"),
+          values=c(1), hl.col=c("purple"),
+          side.main="Symbol", 
+          #counts=DD.dgel$counts, 
+          #counts=DD.logInt.mtx[rownames(DD.voomqw.tfit),order(DD.dgel$samples$diseaseState)],
+          counts=DD.logIntT.mtx,
+          groups=DD.dgel$samples$sml,
+          sample.col=smlCol.vec[DD.dgel$samples$sml],
+          path = '.', folder = figures_DIR, las=2,
+          html = paste0(PREFIX,CONTRAST,"voomqw_efit", ".MDplot"), launch = F)
+
+```
+
+
+Link to glMDSPlot:  
+[H4vsUntr](`r file.path(figures_DIR, paste0(PREFIX,CONTRAST,"voomqw_efit", ".MDplot.html"))`)  
+
+
+# STOP HERE
+
+# References
+<div id="refs"></div>
+
+# Appendix
+
+
+## Parameter settings
+  * WRKDIR = `r WRKDIR`
+  * FN = `r FN`
+  * Scripts = Scripts
+  * RUN DATE = `r date()`
+
+
+## Session Info
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+ sessionInfo()
+```
+
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+  knit_exit()
+```
+
+
+```{r m2a-MDplotNoDELoF, cache=T, cach.vars='', out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(Glimma))
+ DD.voomqw.tfit.dt <- decideTests(DD.voomqw.tfit,adjust.method = "BH", p.value = 0.05)
+
+ BetweendiseaseStateVar.vec <- apply(DD.voomqw.tfit$coefficients,1,var)
+ F.vec <- BetweendiseaseStateVar.vec/DD.voomqw.tfit$sigma^2
+
+TISSUE <- 'Colon'
+
+ # Only plot for selected points
+ Sel.ndx <- which( 1 ==
+ 1*(rowSums(abs(DD.voomqw.tfit.dt) == 1) == 0) *
+ 1*(F.vec < median(F.vec, prob=0.25)))
+
+ glMDPlot(DD.voomqw.tfit[Sel.ndx,], 
+          coef=TISSUE, 
+          #status= 1*(rowSums(abs(DD.voomqw.tfit.dt) == 1) == 0) *
+          #     1*(DD.voomqw.tfit$sigma < median(DD.voomqw.tfit$sigma, prob=0.25)),
+          main=paste('Colon FC - NoDE, Low F Genes: N =',
+          sum(1*(rowSums(abs(DD.voomqw.tfit.dt) == 1) == 0) *
+                1*(DD.voomqw.tfit$sigma < median(DD.voomqw.tfit$sigma, prob=0.25)))),
+          #values=c(0,1), hl.col=c("grey","purple"),
+          values=c(1), hl.col=c("purple"),
+          side.main="Symbol", 
+          #counts=DD.dgel$counts, 
+          #counts=DD.logIntT.mtx[rownames(DD.voomqw.tfit),order(DD.dgel$samples$diseaseState)],
+          counts=DD.logIntT.mtx[Sel.ndx,order(DD.dgel$samples$diseaseState)],
+          groups=sort(DD.dgel$samples$diseaseState),
+          sample.col=diseaseStateCol.vec[sort(DD.dgel$samples$diseaseState)],
+          path = '.', folder = figures_DIR,las=2,
+          html = paste0(PREFIX,"NoDELowF","MDplot"), launch = F)
+
+```
+
+
+Now look at DE genes in each tissue type.  
+```{r m2a-MDplotAll, cache=T, cach.vars='', out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(Glimma))
+ DD.voomqw.tfit.dt <- decideTests(DD.voomqw.tfit,adjust.method = "BH", p.value = 0.05)
+
+ for(TISSUE in c("Breast","Prostate", "Colon", "Brain", "Kidney", "Blood", "Testis")){
+ #colnames(DD.voomqw.tfit.dt)) {
+ glMDPlot(DD.voomqw.tfit, 
+          coef=TISSUE, 
+          status=DD.voomqw.tfit.dt[,TISSUE],
+          main=TISSUE,
+          side.main="Symbol", 
+          #counts=DD.dgel$counts, 
+          counts=DD.logIntT.mtx[rownames(DD.voomqw.tfit),order(DD.dgel$samples$diseaseState)],
+          groups=sort(DD.dgel$samples$diseaseState),
+          sample.col=diseaseStateCol.vec[sort(DD.dgel$samples$diseaseState)],
+          path = '.', folder = figures_DIR,las=2,
+          html = paste0(PREFIX,TISSUE,"MDplot"), launch = F)
+   }
+
+```
+[BreastMDplot](`r file.path(figures_DIR, paste0(PREFIX,"BreastMDplot.html"))`)  
+[ProstateMDplot](`r file.path(figures_DIR, paste0(PREFIX,"ProstateMDplot.html"))`)  
+[ColonMDplot](`r file.path(figures_DIR, paste0(PREFIX,"ColonMDplot.html"))`)  
+[BrainMDplot](`r file.path(figures_DIR, paste0(PREFIX,"BrainMDplot.html"))`)  
+[KidneyMDplot](`r file.path(figures_DIR, paste0(PREFIX,"KidneyMDplot.html"))`)  
+[BloodMDplot](`r file.path(figures_DIR, paste0(PREFIX,"BloodMDplot.html"))`)  
+[TestisMDplot](`r file.path(figures_DIR, paste0(PREFIX,"TestisMDplot.html"))`)  
+
+<!--
+[BladderMDplot](`r file.path(figures_DIR, paste0(PREFIX,"BladderMDplot.html"))`)
+[ColonMDplot](`r file.path(figures_DIR, paste0(PREFIX,"ColonMDplot.html"))`)
+[HeartMDplot](`r file.path(figures_DIR, paste0(PREFIX,"HeartMDplot.html"))`)
+[LiverMDplot](`r file.path(figures_DIR, paste0(PREFIX,"LiverMDplot.html"))`)
+[LungMDplot](`r file.path(figures_DIR, paste0(PREFIX,"LungMDplot.html"))`)
+[MuscleMDplot](`r file.path(figures_DIR, paste0(PREFIX,"MuscleMDplot.html"))`)
+[OvaryMDplot](`r file.path(figures_DIR, paste0(PREFIX,"OvaryMDplot.html"))`)
+[PancreasMDplot](`r file.path(figures_DIR, paste0(PREFIX,"PancreasMDplot.html"))`)
+[SkinMDplot](`r file.path(figures_DIR, paste0(PREFIX,"SkinMDplot.html"))`)
+[StomachMDplot](`r file.path(figures_DIR, paste0(PREFIX,"StomachMDplot.html"))`)
+-->
+
+# Examining uniquely expressed genes
+
+Inspection of the MD plots in which the genes that are differentially expressed in the various
+tissues  are identified, we note that the differentially expressed genes can be expressed in 
+several tissues in addition to the tissue used for selection.
+This is not surprising and agrees with the findings in 
+Mele, 2015 [@Mele:2015aa] who report on *The human transcriptome across tissues and individuals*,
+including tissue specificity, based on an analysis of some of the GTEx data.  Calling 
+genes *detected* if they have RPKM > 0.1 a phi-correlation is computed from
+the contingency table that cross-classifies each gene as detected or not and in particular tissue
+vurse the rest of the tissues (see page 11 of supplement to [@Mele:2015aa]).  They find
+that fewer than 200 gene are exclusively expressed in a given tisssue and the vast majority are in testis.
+
+Here we will use the gene expression data to get at uniqueness.  This makes better use of
+the data and avoids relying on an arbitrary definition of gene detection. 
+To get uniqueness we can impose a secondary filter requiring that the
+gene is not differentially expressed in any of the other tissues.  To get at genes
+with no differential expression in the complementary set of tissues, one can require that
+the genes have a non-significant p-value in an F-test fitted to the complementary set.
+
+
+```{r m2a-getCompDesign, cache=F, eval=F, echo=F, out.width.px=1, out.height.px=1}
+
+#############################################################################
+### This was getting at estimating som econtrast, the mean of all complementray tissues
+### That's not what we want
+### We want to fit an ANOVA to complementary tissues, and keep the non-significant results
+#############################################################################
+
+ # Recall - diseaseState is the variable in GTEX used to identify tissue source.
+
+ # RECALL 
+ #diseaseStateDesign <- with(DD.dgel$samples, model.matrix( ~ -1 + diseaseState))
+ #colnames(diseaseStateDesign) <- sub('diseaseState','', colnames(diseaseStateDesign))
+
+ diseaseStateDesign[1:5,]
+
+REPLACE.THIS <- function() {
+ groupContrasts <- makeContrasts(
+ Colon = Colon - (Colon + Brain + Breast + Colon + Heart + Kidney + Liver +
+                      Lung + Muscle + Ovary + Pancreas + Prostate + Skin + Stomach + Testis)/ncol(diseaseStateDesign),
+ Brain = Brain - (Colon + Brain + Breast + Colon + Heart + Kidney + Liver +
+                      Lung + Muscle + Ovary + Pancreas + Prostate + Skin + Stomach + Testis)/ncol(diseaseStateDesign),
+ levels=colnames(diseaseStateDesign))
+ groupContrasts
+}#
+
+ # WITH THIS
+ #diseaseStateContrasts <- sweep(diag(ncol(diseaseStateDesign)), 2, rep(1/ncol(diseaseStateDesign), ncol(diseaseStateDesign)), '-')
+ #dimnames(diseaseStateContrasts) <- list(Levels=colnames(diseaseStateDesign),
+                                  #Contrasts=colnames(diseaseStateDesign))
+ diseaseStateContrasts[1:5, 1:5]
+
+ diseaseStateContrastsDiag <- diag(nrow(diseaseStateContrasts))
+ diag(diseaseStateContrastsDiag) <- diag(diseaseStateContrasts)
+
+ compdiseaseStateContrasts <-  diseaseStateContrastsDiag - diseaseStateContrasts
+ compdiseaseStateContrasts[1:5, 1:5]
+
+ compdiseaseStateContrasts <- sweep(compdiseaseStateContrasts, 1, rowSums(compdiseaseStateContrasts), '/')
+ compdiseaseStateContrasts[1:5, 1:5]
+
+ rowSums(compdiseaseStateContrasts)
+
+ ###Fit complementary models
+
+ # No need to repeat this!
+ #DD.voomqw <- voomWithQualityWeights(DD.dgel, diseaseStateDesign, plot=TRUE)
+ DD.voomqw[,1:4]
+
+ # Need to repeat this (cause DD.voomqw.fit object operated on)
+ DD.voomqw.fit <- lmFit(DD.voomqw, diseaseStateDesign)
+
+ DD.voomqw.compfit <- contrasts.fit(DD.voomqw.fit, contrasts=compdiseaseStateContrasts)
+ DD.voomqw.compefit <- eBayes(DD.voomqw.compfit)
+
+ #plotSA(DD.voomqw.compefit, main="Final model: Mean−variance trend")
+
+ DD.voomqw.compefit.dt <- decideTests(DD.voomqw.compefit,adjust.method = "none", p.value = 0.05)
+ summary(DD.voomqw.compefit.dt)
+
+```
+
+
+```{r m2a-getCompFitList, cache=T, cache.vars='',echo=F,eval=F, out.width.px=1, out.height.px=1}
+###Get list of fits to complementary tissues.
+
+  sum(colnames(DD.voomqw) != rownames(DD.dgel$samples))
+  
+  # In this fit, we want to fit the NULL model - only intercetp - that doesn;t work!
+
+  # Fit a model with intecept to remaining tissues
+  DD.voomqw.compFit.lst <- lapply(colnames(diseaseStateDesign),  function(GRP)
+    lmFit(DD.voomqw[, DD.dgel$samples$group!=GRP],   #$E) #, design=rep(1, sum(DD.dgel$samples$group!=GR)))
+          cbind(Intercep=1, diseaseStateDesign[DD.dgel$samples$group!=GRP, colnames(diseaseStateDesign)!=GRP][,-1]))
+   )
+  names(DD.voomqw.compFit.lst) <- colnames(diseaseStateDesign)
+
+  DD.voomqw.compFit.eBayes.lst <- lapply(DD.voomqw.compFit.lst, eBayes)
+  topTable(DD.voomqw.compFit.eBayes.lst[[1]])
+  names(DD.voomqw.compFit.eBayes.lst)  
+
+  #DD.voomqw.compFit.eBayes.topTable.lst <- lapply(DD.voomqw.compFit.eBayes.lst, 
+  #topTable, number=Inf)
+
+  DD.voomqw.compFit.eBayes.maxT.mtx <- sapply(DD.voomqw.compFit.eBayes.lst,
+  function(LL) apply(LL$t[, -1], 1, max))
+
+  # for each complementary tissue set, what is the max t
+  DD.voomqw.compFit.eBayes.maxT.mtx[1:5, 1:5]
+
+  kable(t(apply(DD.voomqw.compFit.eBayes.maxT.mtx,2, summary)))
+
+```
+
+Alternatively, one might flag genes based on a maximum tissue-specific score of some 
+sort as `uniqueness` excludes all other tissues.  `t scores` are scaled by variability and
+thus mask the effect size.  Conversely, `fold-change scores` only include effect size information 
+and negelct variability. 
+
+Maybe a better approach is simply to compare identified genes across tissues and exclude 
+from consideration for tissue-specific genes, any gene that is identified in more than one 
+tissue.  This is what we'll do here.
+
+
+```{r m2a-voomqwTfitNtissueDiff,eval=T,echo=T, out.width.px=1, out.height.px=1}
+  ### First let's see how many unique genes exist by this definition.
+
+  # recall
+  summary(DD.voomqw.tfit.dt)
+
+  #DD.voomqw.tfit.dt[1:5,1:5]
+
+  rbind(Up=colSums(DD.voomqw.tfit.dt==1),
+        DownNup=colSums(abs(DD.voomqw.tfit.dt)==1))
+
+  # for uniqueness, we should consider both up and down movements
+  DD.voomqw.tfit.NtissueDiff.vec <- rowSums(abs(DD.voomqw.tfit.dt)==1)
+
+  table(DD.voomqw.tfit.NtissueDiff.vec)
+
+```
+
+So there are potentially `r table(DD.voomqw.tfit.NtissueDiff.vec)[2]` tissue-specific genes.
+Here we look at these more carefully.
+
+
+```{r m2a-voomqwTfitUniqueGenes, out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(Glimma))
+
+ DD.voomqw.tfit.dt <- decideTests(DD.voomqw.tfit,adjust.method = "BH", p.value = 0.05)
+
+ unique.ndx <- which(DD.voomqw.tfit.NtissueDiff.vec==1)
+ DD.voomqw.tfit.uniqueGenes.vec <- names(DD.voomqw.tfit.NtissueDiff.vec)[unique.ndx]
+
+ # Double check - abs to count up and down
+ table(rowSums(abs(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,])==1))
+
+ # See distribution by tissue - no abs counts up only
+ colSums(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,]==1)
+
+ # To look Colon
+ DD.voomqw.tfit.uniqueGenes.vec[which(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,'Colon']==1)]
+
+ cat("Summary of all exclusive genes:\n")
+ #do.call('cbind', lapply(colnames(DD.voomqw.tfit.dt),
+   #function(CONTRAST) table(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,CONTRAST])))
+
+ rbind(Up=colSums(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,] == 1), 
+       Dn=colSums(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,] == -1)) 
+
+ #DT::datatable(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,],
+               #rownames=T,editable=F,options=list(pageLength=40))
+
+ # write to file
+ write.table(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,], 
+  file=file.path(tables_DIR, paste0(DD, 'subNoXY.voomqw.tfit.UniqueGenes.dt.tab')),
+  row.names=T, col.names=NA, sep='\t')
+ 
+ 
+
+ #for(TISSUE in colnames(DD.voomqw.tfit.dt)) {
+ for(TISSUE in c("Breast","Prostate", "Colon", "Brain", "Kidney", "Blood", "Testis")){
+ TissueGenes <-  DD.voomqw.tfit.uniqueGenes.vec[which(DD.voomqw.tfit.dt[DD.voomqw.tfit.uniqueGenes.vec,TISSUE]==1)]
+
+ glMDPlot(DD.voomqw.tfit,
+          coef=TISSUE,
+          status=1*is.element(rownames(DD.logIntT.mtx), TissueGenes),
+          main=paste(TISSUE, '- unique Up Genes by voomqw'),
+          side.main="Symbol",
+          #counts=DD.dgel$counts,
+          counts=DD.logIntT.mtx[rownames(DD.voomqw.tfit),order(DD.dgel$samples$diseaseState)],
+          groups=sort(DD.dgel$samples$diseaseState),
+          sample.col=diseaseStateCol.vec[sort(DD.dgel$samples$diseaseState)],
+          path = '.', folder = figures_DIR,las=2,
+          html = paste0(PREFIX,TISSUE,".voomqwUniqueMDplot"), launch = F)
+ }#for(TISSUE
+
+
+
+```
+
+[BreastvoomqwUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Breast.voomqwUniqueMDplot.html"))`)    
+[ProstatevoomqwUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Prostate.voomqwUniqueMDplot.html"))`)    
+[ColonvoomqwUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Colon.voomqwUniqueMDplot.html"))`)    
+[BrainvoomqwUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Brain.voomqwUniqueMDplot.html"))`)    
+[KidneyvoomqwUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Kidney.voomqwUniqueMDplot.html"))`)    
+[BloodvoomqwUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Blood.voomqwUniqueMDplot.html"))`)    
+[TestisvoomqwUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Testis.voomqwUniqueMDplot.html"))`)    
+  
+
+Repeat search for tissue-specific features using voom instead of voomqw.
+
+```{r m2a-voomTfitNtissueDiff, out.width.px=1, out.height.px=1}
+
+  # recall
+  summary(DD.voom.tfit.dt)
+
+
+  #DD.voom.tfit.dt[1:5,1:5]
+
+  colSums(DD.voom.tfit.dt==1)
+
+  # for uniqueness, we should consider both up and down movements
+  DD.voom.tfit.NtissueDiff.vec <- rowSums(abs(DD.voom.tfit.dt)==1)
+
+  table(DD.voom.tfit.NtissueDiff.vec)
+
+```
+
+So there are potentially `r table(DD.voom.tfit.NtissueDiff.vec)[2]` tissue-specific genes.
+
+
+```{r m2a-voomTfitUniqueGenes, out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(Glimma))
+
+ unique.ndx <- which(DD.voom.tfit.NtissueDiff.vec==1)
+ DD.voom.tfit.uniqueGenes.vec <- names(DD.voom.tfit.NtissueDiff.vec)[unique.ndx]
+
+ # Double check
+ table(rowSums(abs(DD.voom.tfit.dt[DD.voom.tfit.uniqueGenes.vec,])==1))
+
+ # See distribution by tissue
+ colSums(abs(DD.voom.tfit.dt[DD.voom.tfit.uniqueGenes.vec,])==1)
+
+ # To look Colon - Up genes
+ DD.voom.tfit.uniqueGenes.vec[which(DD.voom.tfit.dt[DD.voom.tfit.uniqueGenes.vec,'Colon']==1)]
+
+ DD.voom.tfit.dt <- decideTests(DD.voom.tfit,adjust.method = "BH", p.value = 0.05)
+
+ #for(TISSUE in colnames(DD.voom.tfit.dt)) {
+ for(TISSUE in c("Breast","Prostate", "Colon", "Brain", "Kidney", "Blood", "Testis")){
+ TissueGenes <-  DD.voom.tfit.uniqueGenes.vec[which(DD.voom.tfit.dt[DD.voom.tfit.uniqueGenes.vec,TISSUE]==1)]
+
+ glMDPlot(DD.voom.tfit,
+          coef=TISSUE,
+          status=1*is.element(rownames(DD.logIntT.mtx), TissueGenes),
+          main=paste(TISSUE, '- unique Up Genes by voom'),
+          side.main="Symbol",
+          #counts=DD.dgel$counts,
+          counts=DD.logIntT.mtx[rownames(DD.voom.tfit),order(DD.dgel$samples$diseaseState)],
+          groups=sort(DD.dgel$samples$diseaseState),
+          sample.col=diseaseStateCol.vec[sort(DD.dgel$samples$diseaseState)],
+          path = '.', folder = figures_DIR,las=2,
+          html = paste0(PREFIX,TISSUE,".voomUniqueMDplot"), launch = F)
+ }#for(TISSUE
+
+
+```
+
+[BreastvoomUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Breast.voomUniqueMDplot.html"))`)  
+[ProstatevoomUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Prostate.voomUniqueMDplot.html"))`)  
+[ColonvoomUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Colon.voomUniqueMDplot.html"))`)  
+[BrainvoomUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Brain.voomUniqueMDplot.html"))`)  
+[KidneyvoomUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Kidney.voomUniqueMDplot.html"))`)  
+[BloodvoomUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Blood.voomUniqueMDplot.html"))`)  
+[TestisvoomUniqueMDplot](`r file.path(figures_DIR, paste0(PREFIX,"Testis.voomUniqueMDplot.html"))`)  
+  
+  
+## Graphical representations of differential expression results: heatmaps
+
+
+```{r m2a-heatmap.2help, echo=FALSE, cache=TRUE, cache.vars='gplots.heatmap.2.path', out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+ gplots.heatmap.2.path <- file.path(help_DIR, 'heatmap.2.gplots.html')
+ static_help("gplots", "heatmap.2", out=gplots.heatmap.2.path)
+```
+
+
+Heatmaps allow users to look at the expression of a subset of genes.
+This can be give useful insight into the expression of individual groups and samples without
+losing perspective of the overall study when focusing on individual genes, or losing resolution
+when examining patterns averaged over thousands of genes at the same time.
+
+The following heatmaps are  created for the top 100 DE genes (as ranked by adjusted p-value) from the 
+Colon vs. healthy contrast using the [heatmap.2](`r gplots.heatmap.2.path`) function from the `gplots` package.
+
+Expression across each gene (or row) have been scaled so that mean expression is zero and standard deviation is one.
+Samples with relatively high expression of a given gene are marked in red and samples with relatively low expression
+are marked in blue. Lighter shades and white represent genes with intermediate expression levels.
+Samples and genes have been reordered by the method of hierarchical clustering.
+A dendrogram is shown for the sample clustering.
+
+
+**BEWARE - Not every row/col is annotated in the margins!**
+
+```{r m2a-heatmapTissueTop100, fig.height=12, fig.width=11, fig.cap="Heatmap from top 100 Tissue genes",cache=T, cache.vars='', out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(gplots))
+
+ 
+ #for(TISSUE in colnames(DD.voomqw.tfit.dt)[1]) {
+ for(TISSUE in c("Breast","Prostate", "Colon", "Brain", "Kidney", "Blood", "Testis")[1]){
+  TISSUE.voomqw.efit.top <- topTable(DD.voomqw.efit, coef=TISSUE, number=Inf)
+  efitTop100.vec <- TISSUE.voomqw.efit.top[1:100, "Symbol"]
+  efitTop100.ndx <- which(DD.dgel$genes$Symbol %in% efitTop100.vec)
+ 
+  Mycol <- colorpanel(1000, "blue", "red")
+  heatmap.2(
+    x=DD.logIntT.mtx[efitTop100.ndx,],
+    scale="row",
+    labRow=DD.dgel$genes$Symbol[efitTop100.ndx],
+    labCol=DD.dgel$samples$diseaseState,
+    col=Mycol, trace="none", density.info="none", 
+    margin=c(8,6), lhei=c(2,10), 
+    lwid=c(0.1,4), #lhei=c(0.1,4)
+    key=F,
+    ColSideColors=diseaseStateCol.vec[DD.dgel$samples$diseaseState],
+    dendrogram="column",
+    main=TISSUE)
+ }#for(TISSUE
+
+```
+
+<!--
+**Heat map constructed with 100 `most variable` genes.**
+-->
+```{r m2a-heatmapMVTop100, fig.height=12, fig.width=11, fig.cap="Heatmap from top 100 Most Variable genes",cache=T, cache.vars='',echo=F,eval=F, out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(gplots))
+
+ 
+  DD.logInt.mad.vec <- apply(DD.logIntT.mtx,1,mad)
+  DD.logInt.mad.vec <- rev(sort(DD.logInt.mad.vec))
+ 
+  MVTop100.vec <- sapply(strsplit(names(DD.logInt.mad.vec[1:100]),split='~'),'[',2)
+
+  MVTop100.ndx <- which(DD.dgel$genes$Symbol %in% MVTop100.vec)
+ 
+  Mycol <- colorpanel(1000, "blue", "red")
+  heatmap.2(
+    x=DD.logIntT.mtx[MVTop100.ndx,],
+    scale="row",
+    labRow=DD.dgel$genes$Symbol[MVTop100.ndx],
+    labCol=DD.dgel$samples$diseaseState,
+    col=Mycol, trace="none", density.info="none", 
+    margin=c(8,6), lhei=c(2,10), 
+    lwid=c(0.1,4), #lhei=c(0.1,4)
+    key=F,
+    ColSideColors=diseaseStateCol.vec[DD.dgel$samples$diseaseState],
+    dendrogram="column",
+    main="Most Variable Features")
+
+```
+
+**Heat map constructed with top 100 genes for each tissue**
+
+```{r m2a-heatmapAllTissueTop100, fig.height=12, fig.width=11, fig.cap="Heatmap from top 100 Most Variable genes",cache=T, cache.vars='', out.width.px=1, out.height.px=1}
+ suppressPackageStartupMessages(require(gplots))
+
+ AllTissue.efitTop100.vec <- do.call('c', lapply(colnames(DD.voomqw.tfit.dt),
+ function(TISSUE) {
+  TISSUE.voomqw.efit.top <- topTable(DD.voomqw.efit, coef=TISSUE, number=Inf)
+  TISSUE.voomqw.efit.top[1:100, "Symbol"]}))
+
+ length(AllTissue.efitTop100.vec)
+
+ AllTissue.efitTop100.vec <- unique(AllTissue.efitTop100.vec)
+ length(AllTissue.efitTop100.vec)
+
+ AllTissue.efitTop100.ndx <- which(DD.dgel$genes$Symbol %in% AllTissue.efitTop100.vec)
+
+  Mycol <- colorpanel(1000, "blue", "red")
+  heatmap.2(
+    x=DD.logIntT.mtx[AllTissue.efitTop100.ndx,],
+    scale="row",
+    labRow=DD.dgel$genes$Symbol[AllTissue.efitTop100.ndx],
+    labCol=DD.dgel$samples$diseaseState,
+    col=Mycol, trace="none", density.info="none",
+    margin=c(8,6), lhei=c(2,10),
+    lwid=c(0.1,4), #lhei=c(0.1,4)
+    key=F,
+    ColSideColors=diseaseStateCol.vec[DD.dgel$samples$diseaseState],
+    dendrogram="column",
+    main="All tissue top 100")
+
+
+```
+
+
+
+<!-- SKIP
+Replot with lfc threshold.
+-->
+
+# Gene set testing
+
+In this section we look at gene set testing by applying the 
+[camera](`r limma.camera.path`) method (Wu and Smyth 2012 [@Wu:2012aa]) 
+to the hallmark gene signatures from Broad Institute’s MSigDB hallmark collection 
+(Subramanian et al. 2005 [@Subramanian:2005aa]) 
+which are available as Rdata objects from 
+http://bioinf.wehi.edu.au/software/MSigDB/. 
+Other useful gene sets derived from MSigDB for both human and mouse,
+such as the C2 gene sets, are also available from this site.
+C2 gene sets have been curated from online databases, publications and domain experts, 
+and hallmark gene sets are selected from MSigDB to have well-defined biological states or processes.
+
+
+```{r m2a-cameraAllTissue, cache=T, cache.vars=c('na.ndx', 'Hs.H.Idx'), out.width.px=1, out.height.px=1}
+ ### CHANGE TO UNCACHE
+
+ load(file.path(MSIGDB_DIR, 'human_H_v5p2.rdata'))
+
+ # First need to conver Symbol to entrez ID
+ suppressPackageStartupMessages(require(org.Hs.eg.db))
+ hs <- org.Hs.eg.db
+ 
+ SymbolEntrezID.frm <- AnnotationDbi::select(hs, 
+       keys = DD.dgel$genes$Symbol,
+       columns = c("ENTREZID"),
+       keytype = "SYMBOL")
+ EntrezID.vec <- SymbolEntrezID.frm[match(DD.dgel$genes$Symbol,SymbolEntrezID.frm$SYMBOL),"ENTREZID"]
+
+ na.ndx <- which(is.na(EntrezID.vec))
+
+ Hs.H.Idx <- ids2indices(Hs.H,id=EntrezID.vec[-na.ndx])
+
+ # Cam by tissue
+ 
+ DD.voomqw.AllTissue.cam.frm <- data.frame()
+ for(TISSUE in colnames(diseaseStateContrasts)) {
+  DD.voomqw.Tissue.cam.frm <- camera(DD.voomqw[-na.ndx,], Hs.H.Idx, contrast=diseaseStateContrasts[, TISSUE])
+  DD.voomqw.AllTissue.cam.frm <- rbind(DD.voomqw.AllTissue.cam.frm,
+  data.frame(Tissue=TISSUE, DD.voomqw.Tissue.cam.frm[DD.voomqw.Tissue.cam.frm$PValue < 0.10,]))
+ }
+
+   
+ DT::datatable(DD.voomqw.AllTissue.cam.frm, rownames=T, editable=F)
+
+
+```
+
+The [camera](`r limma.camera.path`)  function performs a competitive test to assess whether the genes in a given
+set are highly ranked in terms of differential expression relative to genes that are not
+in the set. It uses limma’s linear model framework, taking both the design
+matrix and contrast matrix (if present) and accommodates the observational-level weights
+from [voomqw](`r limma.voom.path`) in the testing procedure. After adjusting the variance of the resulting gene
+set test statistic by a variance inflation factor, that depends on the gene-wise
+correlation (which is set to 0.01 by default, but can be estimated from the data)
+and the size of the set, a p-value is returned and adjusted for multiple testing.
+
+ 
+```{r m2a-barcodeplothelp, echo=FALSE, cache=TRUE, cache.vars='limma.barcodeplot.path', out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+ limma.barcodeplot.path <- file.path(help_DIR, 'barcodeplot.limma.html')
+ static_help("limma", "barcodeplot", out=limma.barcodeplot.path)
+```
+
+<!-- SKIP THIS
+Let's look at a [barcodeplot](`r limma.barcodeplot.path`) plot of
+`HALLMARK_G2M_CHECKPOINT` gene sets in the
+ GaCa vs. healthy contrast with an enrichment line for each set that shows 
+the relative enrichment of the vertical bars in each part of the plot. 
+-->
+
+
+```{r m2a-barcodeG2MColon, fig.height=6, fig.width=11, fig.cap="barcodeplot for GaCa vs healthy - HALLMARK_G2M_CHECKPOINT",eval=F, echo=F, out.width.px=1, out.height.px=1}
+ ### CHANGE TO UNCACHE
+  barcodeplot(DD.voomqw.efit$t[-na.ndx,"Colon"], index=Hs.H.Idx$HALLMARK_G2M_CHECKPOINT,main="Colon")
+```
+
+```{r m2a-mroasthelp, echo=FALSE, cache=TRUE, cache.vars='limma.mroast.path',eval=F, out.width.px=1, out.height.px=1}
+ # CHANGE TO CLEAR CACHE
+# limma.mroast.path <- file.path(help_DIR, 'mroast.limma.html')
+# static_help("limma", "mroast", out=limma.mroast.path)
+```
+
+Other gene set tests are available in `limma`, such as the self-contained tests by 
+**mroast** (Wu et al. 2010 [@Wu:2010aa]).
+Whilst [camera](`r limma.camera.path`) is ideal for testing a large database of gene sets and observing which of them
+rank highly relative to others (as shown above), self-contained tests are
+better for focused testing of one or a few specifically chosen sets to see if they
+are DE in their own right. In other words, [camera](`r limma.camera.path`)  is more appropriate when ‘fishing’
+for gene sets of interest, whereas **mroast** tests sets that are already
+of interest for significance.
+
+
+# Appendices
+
+## Kidney vs Breast Differential Expression Analysis
+
+Repeat the DEA using Kidney and Breast samples only.  
+
+### Subset data
+
+```{r m2a-getKidneyBreastdgel, cache=T, cache.vars='KidneyBreast.NoXY.dgel', out.width.px=1, out.height.px=1}
+
+ cat("Start with clean dgel:\n")
+ loadObj(paste0(DD, '.dgel'), 'DD.dgel')
+ dim(DD.dgel)
+
+ cat("Remove XY:\n")
+ #chr.vec <- sapply(strsplit(rownames(DD.dgel),split='~'),'[',1)
+ chr.vec <- DD.dgel$genes$Chr
+ table(chr.vec)
+
+ chrXY.ndx <- which(chr.vec %in% c('X', 'Y'))
+ length(chrXY.ndx)
+ DD.dgel <- DD.dgel[-chrXY.ndx,]
+ rm(chrXY.ndx)
+
+ cat("Subset Kidney, Breast:\n")
+ KidneyBreast.ndx <- which(DD.dgel$samples$diseaseState %in% c('Kidney', 'Breast'))
+ KidneyBreast.NoXY.dgel <- DD.dgel[, KidneyBreast.ndx]
+ dim(KidneyBreast.NoXY.dgel)
+ 
+ KidneyBreast.NoXY.dgel$samples$diseaseState <- droplevels(KidneyBreast.NoXY.dgel$samples$diseaseState)
+
+ cat("Remove weekly expressed genes:\n")
+ KidneyBreast.NoXY.cpm.mtx <- edgeR::cpm(KidneyBreast.NoXY.dgel)
+ Weak.flg <- rowSums(KidneyBreast.NoXY.cpm.mtx>3) < 5
+ mean(Weak.flg)
+ KidneyBreast.NoXY.dgel <- KidneyBreast.NoXY.dgel[!Weak.flg,, keep.lib.sizes=FALSE]
+ rm(Weak.flg)
+ dim(KidneyBreast.NoXY.dgel)
+ 
+``` 
+
+### Create design matrix and contrasts
+
+
+```{r m2a-getDesignKidneyBreast, cache=F, out.width.px=1, out.height.px=1}
+
+ # Recall - diseaseState is the variable in GTEX used to identify tissue source.
+
+ diseaseStateDesign <- with(KidneyBreast.NoXY.dgel$samples, model.matrix( ~ -1 + diseaseState))
+ colnames(diseaseStateDesign) <- sub('diseaseState','', colnames(diseaseStateDesign))
+
+ diseaseStateDesign[1:5,]
+ colSums(diseaseStateDesign)
+
+ groupContrasts <- makeContrasts(
+ KidneyVsBreast = Kidney - Breast,
+ levels=colnames(diseaseStateDesign))
+ groupContrasts
+
+```
+
+### Removing heteroscedascity from the count data
+
+```{r m2a-voomKidneyBreast, cache=T, cache.vars=c('KidneyBreast.NoXY.voom','KidneyBreast.NoXY.voom.fit','KidneyBreast.NoXY.voom.efit'), fig.height=6, fig.width=11, fig.cap="Removing heteroscedascity - voom plots", out.width.px=1, out.height.px=1}
+
+ par(mfrow=c(1,2))
+ KidneyBreast.NoXY.voom <- voom(KidneyBreast.NoXY.dgel, diseaseStateDesign, plot=TRUE)
+ #KidneyBreast.NoXY.voom[,1:4]
+
+ KidneyBreast.NoXY.voom.fit <- lmFit(KidneyBreast.NoXY.voom, diseaseStateDesign)
+ KidneyBreast.NoXY.voom.fit <- contrasts.fit(KidneyBreast.NoXY.voom.fit, contrasts=groupContrasts)
+ KidneyBreast.NoXY.voom.efit <- eBayes(KidneyBreast.NoXY.voom.fit)
+ plotSA(KidneyBreast.NoXY.voom.efit, main="Final model: Mean−variance trend")
+
+ cat("Save toptable(KidneyBreast.NoXY.voom.efit) to", paste0(DD, "sub.KidneyBreast.NoXY.voom.efit.frm"),'\n')
+ KidneyBreast.NoXY.voom.efit.frm <- topTable(KidneyBreast.NoXY.voom.efit, number=Inf)
+ saveObj(paste0(DD, "sub.KidneyBreast.NoXY.voom.efit.frm"), 'KidneyBreast.NoXY.voom.efit.frm')
+
+ cat("Save KidneyBreast.NoXY.voom.efit to", paste0(DD, "sub.KidneyBreast.NoXY.voom.efit"),'\n')
+ saveObj(paste0(DD, "sub.KidneyBreast.NoXY.voom.efit"), 'KidneyBreast.NoXY.voom.efit')
+```
+
+
+```{r m2a-voomqwKidneyBreast, cache=T, cache.vars=c('KidneyBreast.NoXY.voomqw','KidneyBreast.NoXY.voomqw.fit','KidneyBreast.NoXY.voomqw.efit'), fig.height=6, fig.width=11, fig.cap="Removing heteroscedascity - voomqw plots", echo=F, eval=T, out.width.px=1, out.height.px=1}
+
+ par(mfrow=c(1,3))
+ KidneyBreast.NoXY.voomqw <- voomWithQualityWeights(KidneyBreast.NoXY.dgel, diseaseStateDesign, plot=TRUE)
+ #KidneyBreast.NoXY.voomqw[,1:4]
+
+ KidneyBreast.NoXY.voomqw.fit <- lmFit(KidneyBreast.NoXY.voomqw, diseaseStateDesign)
+ KidneyBreast.NoXY.voomqw.fit <- contrasts.fit(KidneyBreast.NoXY.voomqw.fit, contrasts=groupContrasts)
+ KidneyBreast.NoXY.voomqw.efit <- eBayes(KidneyBreast.NoXY.voomqw.fit)
+ plotSA(KidneyBreast.NoXY.voomqw.efit, main="Final model: Mean−variance trend")
+
+ cat("Save toptable(KidneyBreast.NoXY.voomqw.efit) to", paste0(DD, "sub.KidneyBreast.NoXY.voomqw.efit.frm"),'\n')
+ KidneyBreast.NoXY.voomqw.efit.frm <- topTable(KidneyBreast.NoXY.voomqw.efit, number=Inf)
+ saveObj(paste0(DD, "sub.KidneyBreast.NoXY.voomqw.efit.frm"), 'KidneyBreast.NoXY.voomqw.efit.frm')
+```
+
+
+### Examining DE genes
+
+For a quick look at differential expression levels, the number of significantly up- and down-regulated genes
+can be summarised in a table. Significance is defined using an adjusted p-value cutoff that is set at 5% by default.
+
+
+```{r m2a-overlapDEKidneyBreast, cache=T, cache.vars=c('KidneyBreast.NoXY.voom.efit.dt'), out.width.px=1, out.height.px=1}
+
+
+ # kelly's colors - https://i.kinja-img.com/gawker-media/image/upload/1015680494325093012.JPG
+ # https://gist.github.com/ollieglass/f6ddd781eeae1d24e391265432297538
+ KellyColors.vec <- c('#F3C300', '#875692', '#F38400', '#A1CAF1',
+                      '#BE0032', '#C2B280', '#848482', '#008856', '#E68FAC', '#0067A5',
+                      '#F99379', '#604E97', '#F6A600', '#B3446C', '#DCD300', '#882D17',
+                      '#F2F3F4', '#222222',  ### shifted down from pos 1:2
+                      '#8DB600', '#654522', '#E25822', '#2B3D26')
+
+ with(KidneyBreast.NoXY.dgel$samples, table(diseaseState))
+
+ KidneyBreast.NoXY.voom.efit.dt <- decideTests(KidneyBreast.NoXY.voom.efit,adjust.method = "BH", p.value = 0.05)
+
+ summary(KidneyBreast.NoXY.voom.efit.dt)
+ 
+ cat("Compare with voomqw:\n")
+ KidneyBreast.NoXY.voomqw.efit.dt <- decideTests(KidneyBreast.NoXY.voomqw.efit,adjust.method = "BH", p.value = 0.05)
+ summary(KidneyBreast.NoXY.voomqw.efit.dt)
+
+```
+
+
+
+For a stricter definition on significance, one may require log-fold-changes (log-FCs) to be above a minimum value.
+The **treat** method (McCarthy and Smyth 2009 [@McCarthy:2009aa])
+can be used to calculate p-values from empirical Bayes moderated t-statistics with a minimum
+log-FC requirement. The number of differentially expressed genes are greatly reduced 
+if we impose a minimal fold-change requirement of **2-fold**.
+
+```{r m2a-treatKidneyBreast, cache=T, cache.vars=c('KidneyBreast.NoXY.voom.tfit','KidneyBreast.NoXY.voom.tfit.dt'), out.width.px=1, out.height.px=1}
+
+ KidneyBreast.NoXY.voom.tfit <- treat(KidneyBreast.NoXY.voom.fit, lfc=log2(2.00))
+ KidneyBreast.NoXY.voom.tfit.dt <- decideTests(KidneyBreast.NoXY.voom.tfit)
+ summary(KidneyBreast.NoXY.voom.tfit.dt)
+
+ tfit.DE.ndx <- which(rowSums(abs(KidneyBreast.NoXY.voom.tfit.dt) == 1) > 0)
+ length(tfit.DE.ndx)
+
+
+ # repeat without effect size requirement
+ efit.DE.ndx <- which(rowSums(abs(KidneyBreast.NoXY.voom.efit.dt) == 1) > 0)
+ length(efit.DE.ndx)
+
+ #saveObj(paste0(DD,'subNoXY.voom.tfit.dt'), 'KidneyBreast.NoXY.voom.tfit.dt')
+
+ cat("Save toptable(KidneyBreast.NoXY.voom.tfit) to", paste0(DD, "sub.KidneyBreast.NoXY.voom.tfit.frm"),'\n')
+ KidneyBreast.NoXY.voom.tfit.frm <- topTreat(KidneyBreast.NoXY.voom.tfit, number=Inf)
+ saveObj(paste0(DD, "sub.KidneyBreast.NoXY.voom.tfit.frm"), 'KidneyBreast.NoXY.voom.tfit.frm')
+
+``` 
+
+Repeat with `voomqw`.
+
+
+```{r m2a-treatqwKidneyBreast, cache=T, cache.vars=c('KidneyBreast.NoXY.voomqw.tfit','KidneyBreast.NoXY.voomqw.tfit.dt'), out.width.px=1, out.height.px=1}
+
+ KidneyBreast.NoXY.voomqw.tfit <- treat(KidneyBreast.NoXY.voomqw.fit, lfc=log2(2.00))
+ KidneyBreast.NoXY.voomqw.tfit.dt <- decideTests(KidneyBreast.NoXY.voomqw.tfit)
+ summary(KidneyBreast.NoXY.voomqw.tfit.dt)
+
+ DE.ndx <- which(rowSums(abs(KidneyBreast.NoXY.voomqw.tfit.dt) == 1) > 0)
+ length(DE.ndx)
+
+ # The complement of these, are the genes that do not have significant effect in any tissue
+ NDE.ndx <- which(rowSums(abs(KidneyBreast.NoXY.voomqw.tfit.dt) == 1) == 0)
+ length(NDE.ndx)
+
+ #saveObj(paste0(DD,'subNoXY.voomqw.tfit.dt'), 'KidneyBreast.NoXY.voomqw.tfit.dt')
+
+
+ cat("Save toptable(KidneyBreast.NoXY.voomqw.tfit) to", paste0(DD, "sub.KidneyBreast.NoXY.voomqw.tfit.frm"),'\n')
+ KidneyBreast.NoXY.voomqw.tfit.frm <- topTreat(KidneyBreast.NoXY.voomqw.tfit, number=Inf)
+ saveObj(paste0(DD, "sub.KidneyBreast.NoXY.voomqw.tfit.frm"), 'KidneyBreast.NoXY.voomqw.tfit.frm')
+
+``` 
+
+## Brain vs Breast Differential Expression Analysis
+
+Repeat the DEA using Brain and Breast samples only.  
+
+### Subset data
+
+```{r m2a-getBrainBreastdgel, cache=T, cache.vars='BrainBreast.NoXY.dgel', out.width.px=1, out.height.px=1}
+
+ cat("Start with clean dgel:\n")
+ loadObj(paste0(DD, '.dgel'), 'DD.dgel')
+ dim(DD.dgel)
+
+ cat("Remove XY:\n")
+ #chr.vec <- sapply(strsplit(rownames(DD.dgel),split='~'),'[',1)
+ chr.vec <- DD.dgel$genes$Chr
+ table(chr.vec)
+
+ chrXY.ndx <- which(chr.vec %in% c('X', 'Y'))
+ length(chrXY.ndx)
+ DD.dgel <- DD.dgel[-chrXY.ndx,]
+ rm(chrXY.ndx)
+
+ cat("Subset Brain, Breast:\n")
+ BrainBreast.ndx <- which(DD.dgel$samples$diseaseState %in% c('Brain', 'Breast'))
+ BrainBreast.NoXY.dgel <- DD.dgel[, BrainBreast.ndx]
+ dim(BrainBreast.NoXY.dgel)
+ 
+ BrainBreast.NoXY.dgel$samples$diseaseState <- droplevels(BrainBreast.NoXY.dgel$samples$diseaseState)
+
+ cat("Remove weekly expressed genes:\n")
+ BrainBreast.NoXY.cpm.mtx <- edgeR::cpm(BrainBreast.NoXY.dgel)
+ Weak.flg <- rowSums(BrainBreast.NoXY.cpm.mtx>3) < 5
+ mean(Weak.flg)
+ BrainBreast.NoXY.dgel <- BrainBreast.NoXY.dgel[!Weak.flg,, keep.lib.sizes=FALSE]
+ rm(Weak.flg)
+ dim(BrainBreast.NoXY.dgel)
+ 
+``` 
+
+### Create design matrix and contrasts
+
+
+```{r m2a-getDesignBrainBreast, cache=F, out.width.px=1, out.height.px=1}
+
+ # Recall - diseaseState is the variable in GTEX used to identify tissue source.
+
+ diseaseStateDesign <- with(BrainBreast.NoXY.dgel$samples, model.matrix( ~ -1 + diseaseState))
+ colnames(diseaseStateDesign) <- sub('diseaseState','', colnames(diseaseStateDesign))
+
+ diseaseStateDesign[1:5,]
+ colSums(diseaseStateDesign)
+
+ groupContrasts <- makeContrasts(
+ BrainVsBreast = Brain - Breast,
+ levels=colnames(diseaseStateDesign))
+ groupContrasts
+
+```
+
+### Removing heteroscedascity from the count data
+
+```{r m2a-voomBrainBreast, cache=T, cache.vars=c('BrainBreast.NoXY.voom','BrainBreast.NoXY.voom.fit','BrainBreast.NoXY.voom.efit'), fig.height=6, fig.width=11, fig.cap="Removing heteroscedascity - voom plots", out.width.px=1, out.height.px=1}
+
+ par(mfrow=c(1,2))
+ BrainBreast.NoXY.voom <- voom(BrainBreast.NoXY.dgel, diseaseStateDesign, plot=TRUE)
+ #BrainBreast.NoXY.voom[,1:4]
+
+ BrainBreast.NoXY.voom.fit <- lmFit(BrainBreast.NoXY.voom, diseaseStateDesign)
+ BrainBreast.NoXY.voom.fit <- contrasts.fit(BrainBreast.NoXY.voom.fit, contrasts=groupContrasts)
+ BrainBreast.NoXY.voom.efit <- eBayes(BrainBreast.NoXY.voom.fit)
+ plotSA(BrainBreast.NoXY.voom.efit, main="Final model: Mean−variance trend")
+
+ cat("Save toptable(BrainBreast.NoXY.voom.efit) to", paste0(DD, "sub.BrainBreast.NoXY.voom.efit.frm"),'\n')
+ BrainBreast.NoXY.voom.efit.frm <- topTable(BrainBreast.NoXY.voom.efit, number=Inf)
+ saveObj(paste0(DD, "sub.BrainBreast.NoXY.voom.efit.frm"), 'BrainBreast.NoXY.voom.efit.frm')
+
+ cat("Save BrainBreast.NoXY.voom.efit to", paste0(DD, "sub.BrainBreast.NoXY.voom.efit"),'\n')
+ saveObj(paste0(DD, "sub.BrainBreast.NoXY.voom.efit"), 'BrainBreast.NoXY.voom.efit')
+```
+
+
+```{r m2a-voomqwBrainBreast, cache=T, cache.vars=c('BrainBreast.NoXY.voomqw','BrainBreast.NoXY.voomqw.fit','BrainBreast.NoXY.voomqw.efit'), fig.height=6, fig.width=11, fig.cap="Removing heteroscedascity - voomqw plots", echo=F, eval=T, out.width.px=1, out.height.px=1}
+
+ par(mfrow=c(1,3))
+ BrainBreast.NoXY.voomqw <- voomWithQualityWeights(BrainBreast.NoXY.dgel, diseaseStateDesign, plot=TRUE)
+ #BrainBreast.NoXY.voomqw[,1:4]
+
+ BrainBreast.NoXY.voomqw.fit <- lmFit(BrainBreast.NoXY.voomqw, diseaseStateDesign)
+ BrainBreast.NoXY.voomqw.fit <- contrasts.fit(BrainBreast.NoXY.voomqw.fit, contrasts=groupContrasts)
+ BrainBreast.NoXY.voomqw.efit <- eBayes(BrainBreast.NoXY.voomqw.fit)
+ plotSA(BrainBreast.NoXY.voomqw.efit, main="Final model: Mean−variance trend")
+
+ cat("Save toptable(BrainBreast.NoXY.voomqw.efit) to", paste0(DD, "sub.BrainBreast.NoXY.voomqw.efit.frm"),'\n')
+ BrainBreast.NoXY.voomqw.efit.frm <- topTable(BrainBreast.NoXY.voomqw.efit, number=Inf)
+ saveObj(paste0(DD, "sub.BrainBreast.NoXY.voomqw.efit.frm"), 'BrainBreast.NoXY.voomqw.efit.frm')
+```
+
+
+### Examining DE genes
+
+For a quick look at differential expression levels, the number of significantly up- and down-regulated genes
+can be summarised in a table. Significance is defined using an adjusted p-value cutoff that is set at 5% by default.
+
+
+```{r m2a-overlapDEBrainBreast, cache=T, cache.vars=c('BrainBreast.NoXY.voom.efit.dt'), out.width.px=1, out.height.px=1}
+
+
+ # kelly's colors - https://i.kinja-img.com/gawker-media/image/upload/1015680494325093012.JPG
+ # https://gist.github.com/ollieglass/f6ddd781eeae1d24e391265432297538
+ KellyColors.vec <- c('#F3C300', '#875692', '#F38400', '#A1CAF1',
+                      '#BE0032', '#C2B280', '#848482', '#008856', '#E68FAC', '#0067A5',
+                      '#F99379', '#604E97', '#F6A600', '#B3446C', '#DCD300', '#882D17',
+                      '#F2F3F4', '#222222',  ### shifted down from pos 1:2
+                      '#8DB600', '#654522', '#E25822', '#2B3D26')
+
+ with(BrainBreast.NoXY.dgel$samples, table(diseaseState))
+
+ BrainBreast.NoXY.voom.efit.dt <- decideTests(BrainBreast.NoXY.voom.efit,adjust.method = "BH", p.value = 0.05)
+
+ summary(BrainBreast.NoXY.voom.efit.dt)
+ 
+ cat("Compare with voomqw:\n")
+ BrainBreast.NoXY.voomqw.efit.dt <- decideTests(BrainBreast.NoXY.voomqw.efit,adjust.method = "BH", p.value = 0.05)
+ summary(BrainBreast.NoXY.voomqw.efit.dt)
+
+```
+
+
+
+For a stricter definition on significance, one may require log-fold-changes (log-FCs) to be above a minimum value.
+The **treat** method (McCarthy and Smyth 2009 [@McCarthy:2009aa])
+can be used to calculate p-values from empirical Bayes moderated t-statistics with a minimum
+log-FC requirement. The number of differentially expressed genes are greatly reduced 
+if we impose a minimal fold-change requirement of **2-fold**.
+
+```{r m2a-treatBrainBreast, cache=T, cache.vars=c('BrainBreast.NoXY.voom.tfit','BrainBreast.NoXY.voom.tfit.dt'), out.width.px=1, out.height.px=1}
+
+ BrainBreast.NoXY.voom.tfit <- treat(BrainBreast.NoXY.voom.fit, lfc=log2(2.00))
+ BrainBreast.NoXY.voom.tfit.dt <- decideTests(BrainBreast.NoXY.voom.tfit)
+ summary(BrainBreast.NoXY.voom.tfit.dt)
+
+ tfit.DE.ndx <- which(rowSums(abs(BrainBreast.NoXY.voom.tfit.dt) == 1) > 0)
+ length(tfit.DE.ndx)
+
+
+ # repeat without effect size requirement
+ efit.DE.ndx <- which(rowSums(abs(BrainBreast.NoXY.voom.efit.dt) == 1) > 0)
+ length(efit.DE.ndx)
+
+ #saveObj(paste0(DD,'subNoXY.voom.tfit.dt'), 'BrainBreast.NoXY.voom.tfit.dt')
+
+ cat("Save toptable(BrainBreast.NoXY.voom.tfit) to", paste0(DD, "sub.BrainBreast.NoXY.voom.tfit.frm"),'\n')
+ BrainBreast.NoXY.voom.tfit.frm <- topTreat(BrainBreast.NoXY.voom.tfit, number=Inf)
+ saveObj(paste0(DD, "sub.BrainBreast.NoXY.voom.tfit.frm"), 'BrainBreast.NoXY.voom.tfit.frm')
+
+``` 
+
+Repeat with `voomqw`.
+
+
+```{r m2a-treatqwBrainBreast, cache=T, cache.vars=c('BrainBreast.NoXY.voomqw.tfit','BrainBreast.NoXY.voomqw.tfit.dt'), out.width.px=1, out.height.px=1}
+
+ BrainBreast.NoXY.voomqw.tfit <- treat(BrainBreast.NoXY.voomqw.fit, lfc=log2(2.00))
+ BrainBreast.NoXY.voomqw.tfit.dt <- decideTests(BrainBreast.NoXY.voomqw.tfit)
+ summary(BrainBreast.NoXY.voomqw.tfit.dt)
+
+ DE.ndx <- which(rowSums(abs(BrainBreast.NoXY.voomqw.tfit.dt) == 1) > 0)
+ length(DE.ndx)
+
+ # The complement of these, are the genes that do not have significant effect in any tissue
+ NDE.ndx <- which(rowSums(abs(BrainBreast.NoXY.voomqw.tfit.dt) == 1) == 0)
+ length(NDE.ndx)
+
+ #saveObj(paste0(DD,'subNoXY.voomqw.tfit.dt'), 'BrainBreast.NoXY.voomqw.tfit.dt')
+
+
+ cat("Save toptable(BrainBreast.NoXY.voomqw.tfit) to", paste0(DD, "sub.BrainBreast.NoXY.voomqw.tfit.frm"),'\n')
+ BrainBreast.NoXY.voomqw.tfit.frm <- topTreat(BrainBreast.NoXY.voomqw.tfit, number=Inf)
+ saveObj(paste0(DD, "sub.BrainBreast.NoXY.voomqw.tfit.frm"), 'BrainBreast.NoXY.voomqw.tfit.frm')
+
+``` 
+
+
+<!-- SKIP THIS
+## Examining individual DE genes {#indivDEgenes}
+-->
+```{r m2a-efitToptableBrainBreast, cache=T, cache.vars='',eval=F,echo=F, out.width.px=1, out.height.px=1}
+ #suppressPackageStartupMessages(require(xtable))
+ suppressPackageStartupMessages(require(DT))
+
+ # use tfit (treat) 
+ BrainBreast.NoXY.voomqw.efit.tbl <- topTable(BrainBreast.NoXY.voomqw.efit, number=Inf)
+ tmp <- BrainBreast.NoXY.voomqw.efit.tbl
+
+ for(V in c(colnames(diseaseStateDesign), "AveExpr", "F"))
+ tmp[,V] <- round( tmp[,V],4)
+
+ DT::datatable(tmp,rownames=F,editable=F,options=list(pageLength=16))
+
+ # write to a file
+ BrainBreast.NoXY.voomqw.efit.dt <- decideTests(BrainBreast.NoXY.voomqw.efit,adjust.method = "BH", p.value = 0.05)
+ write.fit(BrainBreast.NoXY.voomqw.efit, BrainBreast.NoXY.voomqw.efit.dt, file=paste0(figures_DIR, PREFIX, DD, '.voomqw.efit.txt'), col.names=NA)
+
+ BrainBreast.NoXY.voomqw.tfit.dt <- decideTests(BrainBreast.NoXY.voomqw.tfit,adjust.method = "BH", p.value = 0.05)
+ write.fit(BrainBreast.NoXY.voomqw.tfit, BrainBreast.NoXY.voomqw.tfit.dt, file=paste0(figures_DIR, PREFIX, DD, '.voomqw.tfit.txt'), col.names=NA)
+
+```
+
+<!-- SKIP THIS TOO
+## Graphical representations of differential expression results: MD Plots {#MDPlots}
+
+To summarise results for all genes visually, mean-difference plots (aka MA plot), which display
+log-FCs from the linear model fit against the average log Intensity values can be
+generated using the [plotMD](`r limma.plotMD.path`) function, with the differentially expressed genes highlighted.
+-->
+
+<!-- 
+# Findings
+-->
+
+# References
+<div id="refs"></div>
+
+# Appendix
+
+
+## Parameter settings
+  * WRKDIR = `r WRKDIR`
+  * FN = `r FN`
+  * Scripts = Scripts
+  * RUN DATE = `r date()`
+
+
+## Session Info
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+ sessionInfo()
+```
+
+
+```{r, echo=FALSE, out.width.px=1, out.height.px=1}
+  knit_exit()
+```
+
+<!-- ### ARCHIVAL CODE BELOW 
+
+ARCHIVAL CODE ABOVE
+-->
+
+<!-- To run
+# nohup Rscript -e "knitr::knit2html('_M2A-look_GSE12139.Rmd')" > _M2A-look_GSE12139.log  &
+
+# Or
+# nohup Rscript -e "rmarkdown::render('_M2A-look_GSE12139.Rmd')" > _M2A-look_GSE12139.log  &
+
+-->

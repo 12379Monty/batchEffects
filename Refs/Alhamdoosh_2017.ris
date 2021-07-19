@@ -1,0 +1,43 @@
+TY  - JOUR
+DB  - PubMed
+AU  - Alhamdoosh, Monther
+AU  - Ng, Milica
+AU  - Wilson, Nicholas J
+AU  - Sheridan, Julie M
+AU  - Huynh, Huy
+AU  - Wilson, Michael J
+AU  - Ritchie, Matthew E
+T1  - Combining multiple tools outperforms individual methods in gene set enrichment analyses
+LA  - eng
+SN  - 1367-4811
+SN  - 1367-4803
+Y1  - 2017/02/01
+AB  - MOTIVATION: Gene set enrichment (GSE) analysis allows researchers to efficiently extract biological insight from long lists of differentially expressed genes by interrogating them at a systems level. In recent years, there has been a proliferation of GSE analysis methods and hence it has become increasingly difficult for researchers to select an optimal GSE tool based on their particular dataset. Moreover, the majority of GSE analysis methods do not allow researchers to simultaneously compare gene set level results between multiple experimental conditions. RESULTS: The ensemble of genes set enrichment analyses (EGSEA) is a method developed for RNA-sequencing data that combines results from twelve algorithms and calculates collective gene set scores to improve the biological relevance of the highest ranked gene sets. EGSEA's gene set database contains around 25 000 gene sets from sixteen collections. It has multiple visualization capabilities that allow researchers to view gene sets at various levels of granularity. EGSEA has been tested on simulated data and on a number of human and mouse datasets and, based on biologists' feedback, consistently outperforms the individual tools that have been combined. Our evaluation demonstrates the superiority of the ensemble approach for GSE analysis, and its utility to effectively and efficiently extrapolate biological functions and potential involvement in disease processes from lists of differentially regulated genes. AVAILABILITY AND IMPLEMENTATION: EGSEA is available as an R package at http://www.bioconductor.org/packages/EGSEA/ . The gene sets collections are available in the R package EGSEAdata from http://www.bioconductor.org/packages/EGSEAdata/ . CONTACTS: monther.alhamdoosh@csl.com.au mritchie@wehi.edu.au. SUPPLEMENTARY INFORMATION: Supplementary data are available at Bioinformatics online.
+SP  - 414
+EP  - 424
+VL  - 33
+IS  - 3
+AN  - 27694195
+UR  - https://pubmed.ncbi.nlm.nih.gov/27694195
+DO  - 10.1093/bioinformatics/btw623
+L2  - https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5408797/
+U1  - 27694195[pmid]
+U2  - PMC5408797[pmcid]
+U4  - btw623[PII]
+J2  - Bioinformatics
+JF  - Bioinformatics (Oxford, England)
+KW  - *Algorithms
+KW  - Animals
+KW  - Computational Biology/methods
+KW  - Databases, Genetic
+KW  - Female
+KW  - Gene Expression Profiling/methods
+KW  - Humans
+KW  - Interleukin-13/metabolism
+KW  - Leukocytes, Mononuclear/metabolism
+KW  - Mammary Glands, Human/metabolism
+KW  - Mice
+KW  - Sequence Analysis, RNA/*methods
+KW  - *Software
+PB  - Oxford University Press
+ER  - 

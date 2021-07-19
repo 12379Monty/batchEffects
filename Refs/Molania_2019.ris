@@ -1,0 +1,27 @@
+Provider: Silverchair
+Database: Oxford University Press
+Content: text/plain; charset="UTF-8"
+
+TY  - JOUR
+AU  - Molania, Ramyar
+AU  - Gagnon-Bartsch, Johann A
+AU  - Dobrovic, Alexander
+AU  - Speed, Terence P
+T1  - A new normalization for Nanostring nCounter gene expression data
+PY  - 2019
+Y1  - 2019/07/09
+DO  - 10.1093/nar/gkz433
+JO  - Nucleic Acids Research
+JA  - Nucleic Acids Res
+VL  - 47
+IS  - 12
+SP  - 6073
+EP  - 6083
+SN  - 0305-1048
+AB  - The Nanostring nCounter gene expression assay uses molecular barcodes and single molecule imaging to detect and count hundreds of unique transcripts in a single reaction. These counts need to be normalized to adjust for the amount of sample, variations in assay efficiency and other factors. Most users adopt the normalization approach described in the nSolver analysis software, which involves background correction based on the observed values of negative control probes, a within-sample normalization using the observed values of positive control probes and normalization across samples using reference (housekeeping) genes. Here we present a new normalization method, Removing Unwanted Variation-III (RUV-III), which makes vital use of technical replicates and suitable control genes. We also propose an approach using pseudo-replicates when technical replicates are not available. The effectiveness of RUV-III is illustrated on four different datasets. We also offer suggestions on the design and analysis of studies involving this technology.
+Y2  - 6/25/2021
+UR  - https://doi.org/10.1093/nar/gkz433
+ER  - 
+
+
+

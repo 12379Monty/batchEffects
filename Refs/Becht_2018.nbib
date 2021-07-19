@@ -1,0 +1,75 @@
+PMID- 30531897
+OWN - NLM
+STAT- Publisher
+LR  - 20210226
+IS  - 1546-1696 (Electronic)
+IS  - 1087-0156 (Linking)
+DP  - 2018 Dec 3
+TI  - Dimensionality reduction for visualizing single-cell data using UMAP.
+LID - 10.1038/nbt.4314 [doi]
+AB  - Advances in single-cell technologies have enabled high-resolution dissection of 
+      tissue composition. Several tools for dimensionality reduction are available to 
+      analyze the large number of parameters generated in single-cell studies. Recently, a 
+      nonlinear dimensionality-reduction technique, uniform manifold approximation and 
+      projection (UMAP), was developed for the analysis of any type of high-dimensional 
+      data. Here we apply it to biological data, using three well-characterized mass 
+      cytometry and single-cell RNA sequencing datasets. Comparing the performance of UMAP 
+      with five other tools, we find that UMAP provides the fastest run times, highest 
+      reproducibility and the most meaningful organization of cell clusters. The work 
+      highlights the use of UMAP for improved visualization and interpretation of 
+      single-cell data.
+FAU - Becht, Etienne
+AU  - Becht E
+AD  - Singapore Immunology Network (SIgN), Agency for Science, Technology and Research 
+      (A*STAR), Singapore, Singapore.
+FAU - McInnes, Leland
+AU  - McInnes L
+AUID- ORCID: 0000-0003-2143-6834
+AD  - Tutte Institute for Mathematics and Computing, Ottawa, Ontario, Canada.
+FAU - Healy, John
+AU  - Healy J
+AD  - Tutte Institute for Mathematics and Computing, Ottawa, Ontario, Canada.
+FAU - Dutertre, Charles-Antoine
+AU  - Dutertre CA
+AD  - Singapore Immunology Network (SIgN), Agency for Science, Technology and Research 
+      (A*STAR), Singapore, Singapore.
+FAU - Kwok, Immanuel W H
+AU  - Kwok IWH
+AD  - Singapore Immunology Network (SIgN), Agency for Science, Technology and Research 
+      (A*STAR), Singapore, Singapore.
+FAU - Ng, Lai Guan
+AU  - Ng LG
+AD  - Singapore Immunology Network (SIgN), Agency for Science, Technology and Research 
+      (A*STAR), Singapore, Singapore.
+FAU - Ginhoux, Florent
+AU  - Ginhoux F
+AUID- ORCID: 0000-0002-2857-7755
+AD  - Singapore Immunology Network (SIgN), Agency for Science, Technology and Research 
+      (A*STAR), Singapore, Singapore.
+FAU - Newell, Evan W
+AU  - Newell EW
+AUID- ORCID: 0000-0002-2889-243X
+AD  - Singapore Immunology Network (SIgN), Agency for Science, Technology and Research 
+      (A*STAR), Singapore, Singapore.
+AD  - Fred Hutchinson Cancer Research Center, Vaccine and Infectious Disease Division, 
+      Seattle, Washington, USA.
+LA  - eng
+PT  - Journal Article
+DEP - 20181203
+PL  - United States
+TA  - Nat Biotechnol
+JT  - Nature biotechnology
+JID - 9604648
+CIN - Nat Biotechnol. 2021 Feb;39(2):156-157. PMID: 33526945
+EDAT- 2018/12/12 06:00
+MHDA- 2018/12/12 06:00
+CRDT- 2018/12/12 06:00
+PHST- 2018/04/11 00:00 [received]
+PHST- 2018/11/05 00:00 [accepted]
+PHST- 2018/12/12 06:00 [entrez]
+PHST- 2018/12/12 06:00 [pubmed]
+PHST- 2018/12/12 06:00 [medline]
+AID - nbt.4314 [pii]
+AID - 10.1038/nbt.4314 [doi]
+PST - aheadofprint
+SO  - Nat Biotechnol. 2018 Dec 3. doi: 10.1038/nbt.4314.

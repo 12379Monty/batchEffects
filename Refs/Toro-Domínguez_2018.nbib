@@ -1,0 +1,104 @@
+PMID- 29938934
+OWN - NLM
+STAT- MEDLINE
+DCOM- 20190801
+LR  - 20210618
+IS  - 2326-5205 (Electronic)
+IS  - 2326-5191 (Linking)
+VI  - 70
+IP  - 12
+DP  - 2018 Dec
+TI  - Stratification of Systemic Lupus Erythematosus Patients Into Three Groups of Disease 
+      Activity Progression According to Longitudinal Gene Expression.
+PG  - 2025-2035
+LID - 10.1002/art.40653 [doi]
+AB  - OBJECTIVE: The highly heterogeneous clinical presentation of systemic lupus 
+      erythematosus (SLE) is characterized by the unpredictable occurrence of disease 
+      flares and organ damage. Attempts to stratify lupus patients have been limited to 
+      classification based on clinical information, leading to unsuccessful clinical 
+      trials and controversial research results. This study was undertaken to develop and 
+      validate a robust method to stratify patients with lupus according to longitudinal 
+      disease activity and whole-genome gene expression data in order to establish 
+      subgroups of patients who share disease progression mechanisms. METHODS: We used a 
+      cluster-based approach to stratify SLE patients based on the correlation between 
+      disease activity scores and longitudinal gene expression information. Clustering 
+      robustness was evaluated by the bootstrap method, and the clusters were 
+      characterized in terms of clinical and functional features. RESULTS: We observed a 
+      clear partition into 3 different disease clusters in 2 independent sets of patients, 
+      one pediatric and one adult, which was not influenced by treatment, race, or other 
+      source of bias. Two of the clusters differentiated into a group showing a 
+      correlation between the percentage of neutrophils and disease activity progression 
+      and a group showing a correlation between the percentage of lymphocytes and disease 
+      activity progression. The third cluster, in which the percentage of neutrophils 
+      correlated to a lesser degree with disease activity, was functionally more 
+      heterogeneous. Patients in the neutrophil-driven clusters had an increased risk of 
+      developing proliferative nephritis. CONCLUSION: Our findings indicate that SLE 
+      patients can be stratified into 3 subgroups of patients who show different 
+      mechanisms of disease progression and are clinically differentiated. Our results 
+      have important implications for treatment options, the design of clinical trials, 
+      our understanding of the etiology of the disease, and the prediction of severe 
+      glomerulonephritis.
+CI  - © 2018, American College of Rheumatology.
+FAU - Toro-Domínguez, Daniel
+AU  - Toro-Domínguez D
+AD  - Centro de Genómica e Investigaciones Oncológicas Pfizer-Universidad de Granada-Junta 
+      de Andalucía, Granada, Spain.
+FAU - Martorell-Marugán, Jordi
+AU  - Martorell-Marugán J
+AD  - Centro de Genómica e Investigaciones Oncológicas Pfizer-Universidad de Granada-Junta 
+      de Andalucía, Granada, Spain.
+FAU - Goldman, Daniel
+AU  - Goldman D
+AD  - Johns Hopkins University School of Medicine, Baltimore, Maryland.
+FAU - Petri, Michelle
+AU  - Petri M
+AUID- ORCID: 0000-0003-1441-5373
+AD  - Johns Hopkins University School of Medicine, Baltimore, Maryland.
+FAU - Carmona-Sáez, Pedro
+AU  - Carmona-Sáez P
+AD  - Centro de Genómica e Investigaciones Oncológicas Pfizer-Universidad de Granada-Junta 
+      de Andalucía, Granada, Spain.
+FAU - Alarcón-Riquelme, Marta E
+AU  - Alarcón-Riquelme ME
+AUID- ORCID: 0000-0002-7632-4154
+AD  - Centro de Genómica e Investigaciones Oncológicas Pfizer-Universidad de Granada-Junta 
+      de Andalucía, Granada, Spain, and Karolinska Institutet, Stockholm, Sweden.
+LA  - eng
+SI  - GENBANK/GSE65391
+GR  - R01 AR069572/AR/NIAMS NIH HHS/United States
+PT  - Journal Article
+PT  - Research Support, Non-U.S. Gov't
+DEP - 20181027
+PL  - United States
+TA  - Arthritis Rheumatol
+JT  - Arthritis & rheumatology (Hoboken, N.J.)
+JID - 101623795
+MH  - Adult
+MH  - Child
+MH  - Cluster Analysis
+MH  - Disease Progression
+MH  - Female
+MH  - *Gene Expression Profiling
+MH  - Glomerulonephritis/genetics
+MH  - Humans
+MH  - Longitudinal Studies
+MH  - Lupus Erythematosus, Systemic/blood/*classification/*genetics
+MH  - Lupus Nephritis/genetics
+MH  - Lymphocytes/*metabolism
+MH  - Male
+MH  - Middle Aged
+MH  - Neutrophils/*metabolism
+MH  - Risk Factors
+MH  - Severity of Illness Index
+EDAT- 2018/06/26 06:00
+MHDA- 2019/08/02 06:00
+CRDT- 2018/06/26 06:00
+PHST- 2018/03/21 00:00 [received]
+PHST- 2018/06/21 00:00 [accepted]
+PHST- 2018/06/26 06:00 [pubmed]
+PHST- 2019/08/02 06:00 [medline]
+PHST- 2018/06/26 06:00 [entrez]
+AID - 10.1002/art.40653 [doi]
+PST - ppublish
+SO  - Arthritis Rheumatol. 2018 Dec;70(12):2025-2035. doi: 10.1002/art.40653. Epub 2018 
+      Oct 27.
